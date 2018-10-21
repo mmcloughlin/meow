@@ -2,7 +2,7 @@
 
 #include "textflag.h"
 
-TEXT ·sum(SB),0,$128-40
+TEXT ·sum(SB),0,$80-40
 #define SEED R8
 	MOVQ     seed+0(FP), SEED
 #define DST_PTR DI
@@ -16,29 +16,27 @@ TEXT ·sum(SB),0,$128-40
 #define IV R9
 	MOVQ     SEED, IV
 	MOVQ     IV, 0(SP)
-	MOVQ     IV, 8(SP)
 	ADDQ     SRC_LEN, IV
 	INCQ     IV
-	MOVQ     IV, 16(SP)
-	MOVQ     IV, 24(SP)
+	MOVQ     IV, 8(SP)
 
 	// Load IV.
 	MOVOU    0(SP), X0
 	MOVOU    0(SP), X1
-	MOVOU    16(SP), X2
-	MOVOU    16(SP), X3
+	MOVOU    0(SP), X2
+	MOVOU    0(SP), X3
 	MOVOU    0(SP), X4
 	MOVOU    0(SP), X5
-	MOVOU    16(SP), X6
-	MOVOU    16(SP), X7
+	MOVOU    0(SP), X6
+	MOVOU    0(SP), X7
 	MOVOU    0(SP), X8
 	MOVOU    0(SP), X9
-	MOVOU    16(SP), X10
-	MOVOU    16(SP), X11
+	MOVOU    0(SP), X10
+	MOVOU    0(SP), X11
 	MOVOU    0(SP), X12
 	MOVOU    0(SP), X13
-	MOVOU    16(SP), X14
-	MOVOU    16(SP), X15
+	MOVOU    0(SP), X14
+	MOVOU    0(SP), X15
 
 loop:
 	CMPQ     SRC_LEN, $256
@@ -70,20 +68,20 @@ loop:
 residual:
 
 finish:
-	MOVOU    X0, 32(SP)
-	MOVOU    X1, 48(SP)
-	MOVOU    X2, 64(SP)
-	MOVOU    X3, 80(SP)
+	MOVOU    X0, 16(SP)
+	MOVOU    X1, 32(SP)
+	MOVOU    X2, 48(SP)
+	MOVOU    X3, 64(SP)
 	MOVOU    0(SP), X0
 	MOVOU    0(SP), X1
-	MOVOU    16(SP), X2
-	MOVOU    16(SP), X3
+	MOVOU    0(SP), X2
+	MOVOU    0(SP), X3
 
 	// Rotation block 0.
-	AESDEC   32(SP), X0
-	AESDEC   48(SP), X1
-	AESDEC   64(SP), X2
-	AESDEC   80(SP), X3
+	AESDEC   16(SP), X0
+	AESDEC   32(SP), X1
+	AESDEC   48(SP), X2
+	AESDEC   64(SP), X3
 	AESDEC   X4, X0
 	AESDEC   X5, X1
 	AESDEC   X6, X2
@@ -98,10 +96,10 @@ finish:
 	AESDEC   X15, X3
 
 	// Rotation block 1.
-	AESDEC   48(SP), X0
-	AESDEC   64(SP), X1
-	AESDEC   80(SP), X2
-	AESDEC   32(SP), X3
+	AESDEC   32(SP), X0
+	AESDEC   48(SP), X1
+	AESDEC   64(SP), X2
+	AESDEC   16(SP), X3
 	AESDEC   X5, X0
 	AESDEC   X6, X1
 	AESDEC   X7, X2
@@ -116,10 +114,10 @@ finish:
 	AESDEC   X12, X3
 
 	// Rotation block 2.
-	AESDEC   64(SP), X0
-	AESDEC   80(SP), X1
-	AESDEC   32(SP), X2
-	AESDEC   48(SP), X3
+	AESDEC   48(SP), X0
+	AESDEC   64(SP), X1
+	AESDEC   16(SP), X2
+	AESDEC   32(SP), X3
 	AESDEC   X6, X0
 	AESDEC   X7, X1
 	AESDEC   X4, X2
@@ -134,10 +132,10 @@ finish:
 	AESDEC   X13, X3
 
 	// Rotation block 3.
-	AESDEC   80(SP), X0
-	AESDEC   32(SP), X1
-	AESDEC   48(SP), X2
-	AESDEC   64(SP), X3
+	AESDEC   64(SP), X0
+	AESDEC   16(SP), X1
+	AESDEC   32(SP), X2
+	AESDEC   48(SP), X3
 	AESDEC   X7, X0
 	AESDEC   X4, X1
 	AESDEC   X5, X2
@@ -154,24 +152,24 @@ finish:
 	// Final merge.
 	AESDEC   0(SP), X0
 	AESDEC   0(SP), X1
-	AESDEC   16(SP), X2
-	AESDEC   16(SP), X3
+	AESDEC   0(SP), X2
+	AESDEC   0(SP), X3
 	AESDEC   0(SP), X0
 	AESDEC   0(SP), X1
-	AESDEC   16(SP), X2
-	AESDEC   16(SP), X3
+	AESDEC   0(SP), X2
+	AESDEC   0(SP), X3
 	AESDEC   0(SP), X0
 	AESDEC   0(SP), X1
-	AESDEC   16(SP), X2
-	AESDEC   16(SP), X3
+	AESDEC   0(SP), X2
+	AESDEC   0(SP), X3
 	AESDEC   0(SP), X0
 	AESDEC   0(SP), X1
-	AESDEC   16(SP), X2
-	AESDEC   16(SP), X3
+	AESDEC   0(SP), X2
+	AESDEC   0(SP), X3
 	AESDEC   0(SP), X0
 	AESDEC   0(SP), X1
-	AESDEC   16(SP), X2
-	AESDEC   16(SP), X3
+	AESDEC   0(SP), X2
+	AESDEC   0(SP), X3
 
 	// Store hash.
 	MOVOU    X0, 0(DST_PTR)

@@ -10,6 +10,7 @@ const Size = 64
 func block(state *byte, src []byte)
 
 // sum computes the Meow checksum of data and writes to dst.
+//go:noescape
 func sum(seed uint64, dst *byte, src []byte)
 
 // Sum returns the Meow checksum of data.

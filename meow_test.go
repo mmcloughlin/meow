@@ -1,6 +1,7 @@
 package meow_test
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
@@ -58,6 +59,24 @@ func TestVectors(t *testing.T) {
 	vs := LoadTestVectors(t)
 	for _, v := range vs {
 		got := meow.Sum(v.Seed, v.Input)
-		t.Logf("got=%x expect=%x", got, v.Hash)
+		AssertBytesEqual(t, v.Hash, got[:])
 	}
+}
+
+func AssertBytesEqual(t *testing.T, expect, got []byte) {
+	if len(expect) != len(got) {
+		t.Fatalf("length mismatch got=%d expect=%d", len(expect), len(got))
+	}
+
+	if bytes.Equal(expect, got) {
+		return
+	}
+
+	n := len(expect)
+	delta := make([]byte, n)
+	for i := 0; i < len(expect); i++ {
+		delta[i] = expect[i] ^ got[i]
+	}
+
+	t.Fatalf("expected equal\n   got=%x\nexpect=%x\n delta=%x", got, expect, delta)
 }

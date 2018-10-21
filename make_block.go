@@ -54,7 +54,7 @@ func (m *Meow) Generate() error {
 
 // sum outputs the entire checksum function.
 func (m *Meow) sum() {
-	m.text("sum", 128, 40)
+	m.text("sum", 16+4*16, 40)
 
 	m.arg("seed", 0, "R8")
 	m.arg("dst_ptr", 8, "DI")
@@ -65,15 +65,13 @@ func (m *Meow) sum() {
 	m.alloc("IV", "R9")
 	m.inst("MOVQ", "SEED, IV")
 	m.inst("MOVQ", "IV, 0(SP)")
-	m.inst("MOVQ", "IV, 8(SP)")
 	m.inst("ADDQ", "SRC_LEN, IV")
 	m.inst("INCQ", "IV")
-	m.inst("MOVQ", "IV, 16(SP)")
-	m.inst("MOVQ", "IV, 24(SP)")
+	m.inst("MOVQ", "IV, 8(SP)")
 
 	m.section("Load IV.")
-	for l := 0; l < 4; l++ {
-		m.loadiv(l)
+	for i := 0; i < 16; i++ {
+		m.inst("MOVOU", "0(SP), X%d", i)
 	}
 
 	m.blockloop("residual")
@@ -89,12 +87,14 @@ func (m *Meow) sum() {
 	}
 
 	for i := 0; i < 4; i++ {
-		addr := fmt.Sprintf("%d(SP)", 32+16*i)
+		addr := fmt.Sprintf("%d(SP)", 16+16*i)
 		m.inst("MOVOU", "X%d, %s", i, addr)
 		s[i] = addr
 	}
 
-	m.loadiv(0)
+	for i := 0; i < 4; i++ {
+		m.inst("MOVOU", "0(SP), X%d", i)
+	}
 
 	for r := 0; r < 4; r++ {
 		m.section(fmt.Sprintf("Rotation block %d.", r))
@@ -108,10 +108,9 @@ func (m *Meow) sum() {
 
 	m.section("Final merge.")
 	for i := 0; i < 5; i++ {
-		m.inst("AESDEC", "0(SP), X0")
-		m.inst("AESDEC", "0(SP), X1")
-		m.inst("AESDEC", "16(SP), X2")
-		m.inst("AESDEC", "16(SP), X3")
+		for j := 0; j < 4; j++ {
+			m.inst("AESDEC", "0(SP), X%d", j)
+		}
 	}
 
 	m.section("Store hash.")
@@ -120,14 +119,6 @@ func (m *Meow) sum() {
 	}
 
 	m.inst("RET", "")
-}
-
-// loadiv loads the IV into the given lane.
-func (m *Meow) loadiv(l int) {
-	m.inst("MOVOU", "0(SP), X%d", 4*l)
-	m.inst("MOVOU", "0(SP), X%d", 4*l+1)
-	m.inst("MOVOU", "16(SP), X%d", 4*l+2)
-	m.inst("MOVOU", "16(SP), X%d", 4*l+3)
 }
 
 // block outputs the single-block hash function.
