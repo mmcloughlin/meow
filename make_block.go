@@ -47,20 +47,117 @@ func NewMeow(w io.Writer) *Meow {
 // Generate triggers assembly generation.
 func (m *Meow) Generate() error {
 	m.header()
+	m.sum()
+	//m.block()
+	return m.err
+}
 
+// sum outputs the entire checksum function.
+func (m *Meow) sum() {
+	m.text("sum", 128, 40)
+
+	m.arg("seed", 0, "R8")
+	m.arg("dst_ptr", 8, "DI")
+	m.arg("src_ptr", 16, "SI")
+	m.arg("src_len", 24, "AX")
+
+	m.section("Prepare IV.")
+	m.alloc("IV", "R9")
+	m.inst("MOVQ", "SEED, IV")
+	m.inst("MOVQ", "IV, 0(SP)")
+	m.inst("MOVQ", "IV, 8(SP)")
+	m.inst("ADDQ", "SRC_LEN, IV")
+	m.inst("INCQ", "IV")
+	m.inst("MOVQ", "IV, 16(SP)")
+	m.inst("MOVQ", "IV, 24(SP)")
+
+	m.section("Load IV.")
+	for l := 0; l < 4; l++ {
+		m.loadiv(l)
+	}
+
+	m.blockloop("residual")
+
+	m.label("residual")
+	// TODO(mbm): handle residual blocks
+
+	m.label("finish")
+
+	s := make([]string, 16)
+	for i := 0; i < 16; i++ {
+		s[i] = fmt.Sprintf("X%d", i)
+	}
+
+	for i := 0; i < 4; i++ {
+		addr := fmt.Sprintf("%d(SP)", 32+16*i)
+		m.inst("MOVOU", "X%d, %s", i, addr)
+		s[i] = addr
+	}
+
+	m.loadiv(0)
+
+	for r := 0; r < 4; r++ {
+		m.section(fmt.Sprintf("Rotation block %d.", r))
+		for i := 0; i < 4; i++ {
+			for j := 0; j < 4; j++ {
+				idx := 4*i + (j+r)%4
+				m.inst("AESDEC", "%s, X%d", s[idx], j)
+			}
+		}
+	}
+
+	m.section("Final merge.")
+	for i := 0; i < 5; i++ {
+		m.inst("AESDEC", "0(SP), X0")
+		m.inst("AESDEC", "0(SP), X1")
+		m.inst("AESDEC", "16(SP), X2")
+		m.inst("AESDEC", "16(SP), X3")
+	}
+
+	m.section("Store hash.")
+	for i := 0; i < 4; i++ {
+		m.inst("MOVOU", "X%d, %d(DST_PTR)", i, 16*i)
+	}
+
+	m.inst("RET", "")
+}
+
+// loadiv loads the IV into the given lane.
+func (m *Meow) loadiv(l int) {
+	m.inst("MOVOU", "0(SP), X%d", 4*l)
+	m.inst("MOVOU", "0(SP), X%d", 4*l+1)
+	m.inst("MOVOU", "16(SP), X%d", 4*l+2)
+	m.inst("MOVOU", "16(SP), X%d", 4*l+3)
+}
+
+// block outputs the single-block hash function.
+func (m *Meow) block() {
 	m.text("block", 0, 0)
 	m.arg("state_ptr", 0, "DI")
 	m.arg("src_ptr", 8, "SI")
-	m.arg("src_len", 0, "AX")
+	m.arg("src_len", 16, "AX")
 
 	m.section("Load state.")
 	for i := 0; i < BlockSize; i += aes.BlockSize {
 		m.inst("MOVOU", "%d(STATE_PTR), X%d", i, i/aes.BlockSize)
 	}
 
+	m.blockloop("done")
+
+	m.label("done")
+	m.section("Store state.")
+	for i := 0; i < BlockSize; i += aes.BlockSize {
+		m.inst("MOVOU", "X%d, %d(STATE_PTR)", i/aes.BlockSize, i)
+	}
+
+	m.inst("RET", "")
+}
+
+// blockloop outputs a loop to encrypt entire blocks, exiting to the provided label.
+func (m *Meow) blockloop(exit string) {
 	m.label("loop")
 	m.inst("CMPQ", "SRC_LEN, $%d", BlockSize)
-	m.inst("JL", "done")
+	m.inst("JL", exit)
 
 	m.section("Hash block.")
 	for i := 0; i < BlockSize; i += aes.BlockSize {
@@ -71,16 +168,6 @@ func (m *Meow) Generate() error {
 	m.inst("ADDQ", "$%d, SRC_PTR", BlockSize)
 	m.inst("SUBQ", "$%d, SRC_LEN", BlockSize)
 	m.inst("JMP", "loop")
-
-	m.label("done")
-	m.section("Store state.")
-	for i := 0; i < BlockSize; i += aes.BlockSize {
-		m.inst("MOVOU", "X%d, %d(STATE_PTR)", i/aes.BlockSize, i)
-	}
-
-	m.inst("RET", "")
-
-	return m.err
 }
 
 // header outputs the file header with code generation warning and standard header includes.

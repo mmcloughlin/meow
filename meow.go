@@ -4,7 +4,7 @@ package meow
 const BlockSize = 256
 
 // Size of a Meow checksum in bytes.
-const Size = 16
+const Size = 64
 
 // block hashes one Meow block.
 func block(state *byte, src []byte)
