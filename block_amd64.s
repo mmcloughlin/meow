@@ -2,7 +2,7 @@
 
 #include "textflag.h"
 
-TEXT ·sum(SB),0,$80-40
+TEXT ·sum(SB),0,$272-40
 #define SEED R8
 	MOVQ     seed+0(FP), SEED
 #define DST_PTR DI
@@ -66,6 +66,100 @@ loop:
 	JMP      loop
 
 residual:
+	CMPQ     SRC_LEN, $0
+	JE       finish
+
+	// Duplicate IV.
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 16(SP)
+	MOVQ     R11, 24(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 32(SP)
+	MOVQ     R11, 40(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 48(SP)
+	MOVQ     R11, 56(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 64(SP)
+	MOVQ     R11, 72(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 80(SP)
+	MOVQ     R11, 88(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 96(SP)
+	MOVQ     R11, 104(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 112(SP)
+	MOVQ     R11, 120(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 128(SP)
+	MOVQ     R11, 136(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 144(SP)
+	MOVQ     R11, 152(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 160(SP)
+	MOVQ     R11, 168(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 176(SP)
+	MOVQ     R11, 184(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 192(SP)
+	MOVQ     R11, 200(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 208(SP)
+	MOVQ     R11, 216(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 224(SP)
+	MOVQ     R11, 232(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 240(SP)
+	MOVQ     R11, 248(SP)
+	MOVQ     0(SP), R10
+	MOVQ     8(SP), R11
+	MOVQ     R10, 256(SP)
+	MOVQ     R11, 264(SP)
+#define BLOCK_PTR BX
+	LEAQ     16(SP), BLOCK_PTR
+
+byteloop:
+	MOVB     (SRC_PTR), R10
+	MOVB     R10, (BX)
+	INCQ     SRC_PTR
+	INCQ     BLOCK_PTR
+	DECQ     SRC_LEN
+	JNE      byteloop
+	AESDEC   16(SP), X0
+	AESDEC   32(SP), X1
+	AESDEC   48(SP), X2
+	AESDEC   64(SP), X3
+	AESDEC   80(SP), X4
+	AESDEC   96(SP), X5
+	AESDEC   112(SP), X6
+	AESDEC   128(SP), X7
+	AESDEC   144(SP), X8
+	AESDEC   160(SP), X9
+	AESDEC   176(SP), X10
+	AESDEC   192(SP), X11
+	AESDEC   208(SP), X12
+	AESDEC   224(SP), X13
+	AESDEC   240(SP), X14
+	AESDEC   256(SP), X15
 
 finish:
 	MOVOU    X0, 16(SP)

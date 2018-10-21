@@ -54,7 +54,7 @@ func (m *Meow) Generate() error {
 
 // sum outputs the entire checksum function.
 func (m *Meow) sum() {
-	m.text("sum", 16+4*16, 40)
+	m.text("sum", 16+BlockSize, 40)
 
 	m.arg("seed", 0, "R8")
 	m.arg("dst_ptr", 8, "DI")
@@ -77,7 +77,30 @@ func (m *Meow) sum() {
 	m.blockloop("residual")
 
 	m.label("residual")
-	// TODO(mbm): handle residual blocks
+	m.inst("CMPQ", "SRC_LEN, $0")
+	m.inst("JE", "finish")
+
+	m.section("Duplicate IV.")
+	for i := 0; i < BlockSize; i += 16 {
+		m.inst("MOVQ", "0(SP), R10")
+		m.inst("MOVQ", "8(SP), R11")
+		m.inst("MOVQ", "R10, %d(SP)", 16+i)
+		m.inst("MOVQ", "R11, %d(SP)", 16+i+8)
+	}
+
+	m.alloc("BLOCK_PTR", "BX")
+	m.inst("LEAQ", "16(SP), BLOCK_PTR")
+	m.label("byteloop")
+	m.inst("MOVB", "(SRC_PTR), R10")
+	m.inst("MOVB", "R10, (BX)")
+	m.inst("INCQ", "SRC_PTR")
+	m.inst("INCQ", "BLOCK_PTR")
+	m.inst("DECQ", "SRC_LEN")
+	m.inst("JNE", "byteloop")
+
+	for i := 0; i < BlockSize; i += aes.BlockSize {
+		m.inst("AESDEC", "%d(SP), X%d", 16+i, i/aes.BlockSize)
+	}
 
 	m.label("finish")
 
