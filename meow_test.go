@@ -58,7 +58,7 @@ func LoadTestVectors(t *testing.T) []TestVector {
 func TestVectors(t *testing.T) {
 	vs := LoadTestVectors(t)
 	for _, v := range vs {
-		got := meow.Sum(v.Seed, v.Input)
+		got := meow.Checksum(v.Seed, v.Input)
 		AssertBytesEqual(t, v.Hash, got[:])
 	}
 }

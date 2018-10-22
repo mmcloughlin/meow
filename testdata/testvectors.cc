@@ -45,7 +45,7 @@ typedef struct
     uint64_t seed;
     size_t len;
     uint8_t *input;
-#define HASH_LEN (128 / 8)
+#define HASH_LEN (512 / 8)
     uint8_t hash[HASH_LEN];
 } test_vector_t;
 
@@ -102,30 +102,22 @@ void output_test_vectors(size_t *lengths, size_t n)
     printf("]\n");
 }
 
-// Generate lengths populates an array with lengths of the form (m^p + i) for p < n, i < a.
-size_t *generate_lengths(size_t m, size_t n, size_t a)
+// Generate lengths populates an array with lengths of the form (a*i)%m for i <= n.
+size_t *generate_lengths(size_t a, size_t m, size_t n)
 {
-    size_t *lengths = (size_t *)malloc(n * a * sizeof(size_t));
+    size_t *lengths = (size_t *)malloc(n * sizeof(size_t));
     assert(lengths);
-    size_t base = 1;
-    size_t idx = 0;
     for (size_t i = 0; i < n; i++)
     {
-        for (size_t j = 0; j < a; j++)
-        {
-            lengths[idx++] = base + j;
-        }
-        base *= m;
+        lengths[i] = (i * a) % m;
     }
     return lengths;
 }
 
 int main()
 {
-    size_t m = 32;
-    size_t n = 3;
-    size_t a = 16;
-    size_t *lengths = generate_lengths(m, n, a);
-    output_test_vectors(lengths, n * a);
+    size_t n = 256;
+    size_t *lengths = generate_lengths(251, 8 << 10, n);
+    output_test_vectors(lengths, n);
     free(lengths);
 }

@@ -31,25 +31,6 @@ func main() {
 	}
 }
 
-type Array struct {
-	Base   string
-	Offset int
-}
-
-func (a Array) Addr(idx int) string {
-	return fmt.Sprintf("%d(%s)", a.Offset+idx, a.Base)
-}
-
-type StackFrame struct {
-	Size int
-}
-
-func (s *StackFrame) Alloc(size int) Array {
-	a := Array{Base: "SP", Offset: s.Size}
-	s.Size += size
-	return a
-}
-
 // Meow writes an assembly implementation of Meow hash components.
 type Meow struct {
 	w   io.Writer // where to write assembly output
@@ -66,18 +47,13 @@ func NewMeow(w io.Writer) *Meow {
 // Generate triggers assembly generation.
 func (m *Meow) Generate() error {
 	m.header()
-	m.sum()
+	m.checksum()
 	return m.err
 }
 
-// sum outputs the entire checksum function.
-func (m *Meow) sum() {
-	frame := StackFrame{}
-	streams := frame.Alloc(BlockSize)
-	partial := frame.Alloc(BlockSize)
-	iv := frame.Alloc(16)
-
-	m.text("sum", frame.Size, 40)
+// checksum outputs the entire checksum function.
+func (m *Meow) checksum() {
+	m.text("checksum", 16+BlockSize, 40)
 
 	m.arg("seed", 0, "R8")
 	m.arg("dst_ptr", 8, "DI")
@@ -87,46 +63,59 @@ func (m *Meow) sum() {
 	m.section("Prepare IV.")
 	m.alloc("IV", "R9")
 	m.inst("MOVQ", "SEED, IV")
-	m.inst("MOVQ", "IV, %s", iv.Addr(0))
+	m.inst("MOVQ", "IV, 0(SP)")
 	m.inst("ADDQ", "SRC_LEN, IV")
 	m.inst("INCQ", "IV")
-	m.inst("MOVQ", "IV, %s", iv.Addr(8))
+	m.inst("MOVQ", "IV, 8(SP)")
 
 	m.section("Load IV.")
-	m.inst("MOVOU", "%s, X0", iv.Addr(0))
 	for i := 0; i < 16; i++ {
-		m.inst("MOVOU", "X0, %s", streams.Addr(16*i))
+		m.inst("MOVOU", "0(SP), X%d", i)
 	}
 
-	m.blockloop(streams, "partial")
+	m.blockloop("residual")
 
-	m.label("partial")
+	m.label("residual")
 	m.inst("CMPQ", "SRC_LEN, $0")
 	m.inst("JE", "finish")
 
-	m.section("Load IV into partial block.")
-	m.inst("MOVOU", "%s, X0", iv.Addr(0))
-	for i := 0; i < 16; i++ {
-		m.inst("MOVOU", "X0, %s", partial.Addr(16*i))
+	m.section("Duplicate IV.")
+	for i := 0; i < BlockSize; i += 16 {
+		m.inst("MOVQ", "0(SP), R10")
+		m.inst("MOVQ", "8(SP), R11")
+		m.inst("MOVQ", "R10, %d(SP)", 16+i)
+		m.inst("MOVQ", "R11, %d(SP)", 16+i+8)
 	}
 
 	m.alloc("BLOCK_PTR", "BX")
-	m.inst("LEAQ", "%s, BLOCK_PTR", partial.Addr(0))
+	m.inst("LEAQ", "16(SP), BLOCK_PTR")
 	m.label("byteloop")
 	m.inst("MOVB", "(SRC_PTR), R10")
-	m.inst("MOVB", "R10, (BLOCK_PTR)")
+	m.inst("MOVB", "R10, (BX)")
 	m.inst("INCQ", "SRC_PTR")
 	m.inst("INCQ", "BLOCK_PTR")
 	m.inst("DECQ", "SRC_LEN")
 	m.inst("JNE", "byteloop")
 
-	m.aesdecblock(streams, partial)
+	for i := 0; i < BlockSize; i += aes.BlockSize {
+		m.inst("VAESDEC", "%d(SP), X%d, X%d", 16+i, i/aes.BlockSize, i/aes.BlockSize)
+	}
 
 	m.label("finish")
 
-	m.section("Load IV into R0.")
+	s := make([]string, 16)
+	for i := 0; i < 16; i++ {
+		s[i] = fmt.Sprintf("X%d", i)
+	}
+
 	for i := 0; i < 4; i++ {
-		m.inst("MOVOU", "%s, X%d", iv.Addr(0), i)
+		addr := fmt.Sprintf("%d(SP)", 16+16*i)
+		m.inst("MOVOU", "X%d, %s", i, addr)
+		s[i] = addr
+	}
+
+	for i := 0; i < 4; i++ {
+		m.inst("MOVOU", "0(SP), X%d", i)
 	}
 
 	for r := 0; r < 4; r++ {
@@ -134,17 +123,15 @@ func (m *Meow) sum() {
 		for i := 0; i < 4; i++ {
 			for j := 0; j < 4; j++ {
 				idx := 4*i + (j+r)%4
-				m.inst("MOVOU", "%s, X%d", streams.Addr(16*idx), j+8)
-				m.inst("AESDEC", "X%d, X%d", j+8, j)
+				m.inst("VAESDEC", "%s, X%d, X%d", s[idx], j, j)
 			}
 		}
 	}
 
 	m.section("Final merge.")
-	m.inst("MOVOU", "%s, X8", iv.Addr(0))
 	for i := 0; i < 5; i++ {
 		for j := 0; j < 4; j++ {
-			m.inst("AESDEC", "X8, X%d", j)
+			m.inst("VAESDEC", "0(SP), X%d, X%d", j, j)
 		}
 	}
 
@@ -156,29 +143,15 @@ func (m *Meow) sum() {
 	m.inst("RET", "")
 }
 
-func (m *Meow) aesdecblock(streams, merge Array) {
-	for i := 0; i < BlockSize; i += aes.BlockSize {
-		j := (i / aes.BlockSize) % 8
-		m.inst("MOVOU", "%s, X%d", streams.Addr(i), j)
-		m.inst("MOVOU", "%s, X%d", merge.Addr(i), j+8)
-		m.inst("AESDEC", "X%d, X%d", j+8, j)
-		m.inst("MOVOU", "X%d, %s", j, streams.Addr(i))
-	}
-}
-
 // blockloop outputs a loop to encrypt entire blocks, exiting to the provided label.
-func (m *Meow) blockloop(streams Array, exit string) {
+func (m *Meow) blockloop(exit string) {
 	m.label("loop")
 	m.inst("CMPQ", "SRC_LEN, $%d", BlockSize)
 	m.inst("JL", exit)
 
 	m.section("Hash block.")
 	for i := 0; i < BlockSize; i += aes.BlockSize {
-		j := (i / aes.BlockSize) % 8
-		m.inst("MOVOU", "%d(SRC_PTR), X%d", i, j)
-		m.inst("MOVOU", "%s, X%d", streams.Addr(i), j+8)
-		m.inst("AESDEC", "X%d, X%d", j, j+8)
-		m.inst("MOVOU", "X%d, %s", j+8, streams.Addr(i))
+		m.inst("VAESDEC", "%d(SRC_PTR), X%d, X%d", i, i/aes.BlockSize, i/aes.BlockSize)
 	}
 
 	m.section("Update source pointer.")
