@@ -80,9 +80,9 @@ func (m *Meow) checksum() {
 	m.inst("JE", "finish")
 
 	m.section("Duplicate IV.")
+	m.inst("MOVQ", "0(SP), R10")
+	m.inst("MOVQ", "8(SP), R11")
 	for i := 0; i < BlockSize; i += 16 {
-		m.inst("MOVQ", "0(SP), R10")
-		m.inst("MOVQ", "8(SP), R11")
 		m.inst("MOVQ", "R10, %d(SP)", 16+i)
 		m.inst("MOVQ", "R11, %d(SP)", 16+i+8)
 	}

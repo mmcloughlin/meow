@@ -74,64 +74,34 @@ residual:
 	MOVQ     8(SP), R11
 	MOVQ     R10, 16(SP)
 	MOVQ     R11, 24(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 32(SP)
 	MOVQ     R11, 40(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 48(SP)
 	MOVQ     R11, 56(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 64(SP)
 	MOVQ     R11, 72(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 80(SP)
 	MOVQ     R11, 88(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 96(SP)
 	MOVQ     R11, 104(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 112(SP)
 	MOVQ     R11, 120(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 128(SP)
 	MOVQ     R11, 136(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 144(SP)
 	MOVQ     R11, 152(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 160(SP)
 	MOVQ     R11, 168(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 176(SP)
 	MOVQ     R11, 184(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 192(SP)
 	MOVQ     R11, 200(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 208(SP)
 	MOVQ     R11, 216(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 224(SP)
 	MOVQ     R11, 232(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 240(SP)
 	MOVQ     R11, 248(SP)
-	MOVQ     0(SP), R10
-	MOVQ     8(SP), R11
 	MOVQ     R10, 256(SP)
 	MOVQ     R11, 264(SP)
 #define BLOCK_PTR BX
