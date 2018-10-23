@@ -1,5 +1,13 @@
 package meow
 
+import "golang.org/x/sys/cpu"
+
+func init() {
+	if !cpu.X86.HasAES || !cpu.X86.HasAVX {
+		panic("arch does not support AES/AVX instructions")
+	}
+}
+
 // BlockSize is the underlying block size of Meow hash in bytes.
 const BlockSize = 256
 
