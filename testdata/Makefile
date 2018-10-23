@@ -1,7 +1,11 @@
 CXX=clang++
-CXXFLAGS=-O3 -maes -std=c++11 -I$(GOOGLE_BENCHMARK_DIR)/include
-LDFLAGS=-L$(GOOGLE_BENCHMARK_DIR)/lib
-LDLIBS=-lbenchmark
+CXXFLAGS=-O3 -maes -std=c++11
+
+ifdef GOOGLE_BENCHMARK_DIR
+	CXXFLAGS+=-O3 -maes -std=c++11 -I$(GOOGLE_BENCHMARK_DIR)/include
+	LDFLAGS=-L$(GOOGLE_BENCHMARK_DIR)/lib
+	LDLIBS=-lbenchmark
+endif
 
 progs=benchmark testvectors
 
