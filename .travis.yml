@@ -6,5 +6,7 @@ script:
 - block=$(mktemp)
 - go run make_block.go -out ${block}
 - cmp block_amd64.s ${block}
+# ensure we can build the testvector generator
+- make -C testdata testvectors
 # run tests
 - go test -v
