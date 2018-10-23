@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <immintrin.h>
 #include <string.h>
+#include <getopt.h>
 
 #include "meow_hash.h"
 
@@ -114,8 +115,19 @@ size_t *generate_lengths(size_t a, size_t m, size_t n)
     return lengths;
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    int opt;
+    while ((opt = getopt(argc, argv, "s:")) != -1)
+    {
+        switch (opt)
+        {
+        case 's':
+            srand(atoi(optarg));
+            break;
+        }
+    }
+
     size_t n = 256;
     size_t *lengths = generate_lengths(251, 8 << 10, n);
     output_test_vectors(lengths, n);

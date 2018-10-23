@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"io/ioutil"
 	"testing"
 
 	"github.com/mmcloughlin/meow"
 )
+
+var testVectorsFilename = flag.String("testvectors", "testdata/testvectors.json", "test vectors filename")
 
 type TestVector struct {
 	Seed  uint64
@@ -18,7 +21,7 @@ type TestVector struct {
 
 func LoadTestVectors(t *testing.T) []TestVector {
 	t.Helper()
-	b, err := ioutil.ReadFile("testdata/testvectors.json")
+	b, err := ioutil.ReadFile(*testVectorsFilename)
 	if err != nil {
 		t.Fatal(err)
 	}
