@@ -2,4 +2,9 @@ language: go
 go:
 - 1.x
 script:
+# confirm the generator script is in sync with the assembly file
+- block=$(mktemp)
+- go run make_block.go -out ${block}
+- cmp block_amd64.s ${block}
+# run tests
 - go test -v
