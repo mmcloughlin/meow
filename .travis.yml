@@ -4,10 +4,13 @@ go:
 script:
 # confirm the generator script is in sync with the assembly file
 - block=$(mktemp)
-- go run make_block.go -out ${block}
+- cp block_amd64.s ${block}
+- go generate -x
 - cmp block_amd64.s ${block}
 # run tests
 - go test -v
+# test fallback
+- go test -v -tags noasm
 # ensure we can build the testvector generator
 - make -C testdata testvectors
 - tv=$(mktemp)
