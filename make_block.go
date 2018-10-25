@@ -14,7 +14,10 @@ import (
 	"strings"
 )
 
-const BlockSize = 256
+const (
+	LaneSize  = 4 * aes.BlockSize
+	BlockSize = 256
+)
 
 var output = flag.String("out", "block_amd64.s", "output filename")
 
@@ -29,6 +32,11 @@ func main() {
 	if err := m.Generate(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// Generator is an interface for assembly generation.
+type Generator interface {
+	inst(name, format string, args ...interface{})
 }
 
 // Array represents a byte array based at Offset.
@@ -63,22 +71,125 @@ func (s *StackFrame) Alloc(size int) Array {
 type Backend interface {
 	// Width is the register width in bits.
 	Width() int
+
+	// StackAlloc allocates necessary space on the stack for the given number of lanes.
+	StackAlloc(*StackFrame)
+
+	// LoadLane loads a 64-byte lane i from the given array.
+	LoadLane(g Generator, m Array, i int)
+
+	// StoreLane writes lane i to the given array.
+	StoreLane(g Generator, i int, m Array)
+
+	// AESLoad AES decrypts with key loaded from an array.
+	AESLoad(g Generator, i int, m Array)
+
+	// AESMerge AES decrypts lane i with key from j.
+	AESMerge(g Generator, i, j int)
+
+	// R0 returns a lane ID for the final return lane.
+	R0(g Generator) int
+
+	// Rotate lane i.
+	Rotate(g Generator, i int)
 }
 
 // AESNI implements the AES-NI backend.
-type AESNI struct{}
+type AESNI struct {
+	spill  Array
+	stream []string
+}
+
+func NewAESNI() *AESNI {
+	stream := make([]string, 16)
+	for i := 0; i < 16; i++ {
+		stream[i] = fmt.Sprintf("X%d", i)
+	}
+	return &AESNI{
+		stream: stream,
+	}
+}
 
 func (a AESNI) Width() int { return 128 }
+
+func (a *AESNI) StackAlloc(f *StackFrame) {
+	a.spill = f.Alloc(LaneSize)
+}
+
+func (a *AESNI) R0(g Generator) int {
+	a.StoreLane(g, 0, a.spill)
+	for i := 0; i < 4; i++ {
+		a.stream[i] = a.spill.Addr(16 * i)
+		a.stream = append(a.stream, fmt.Sprintf("X%d", i))
+	}
+	return 4
+}
+
+func (a AESNI) LoadLane(g Generator, m Array, i int) {
+	for j := 0; j < 4; j++ {
+		g.inst("MOVOU", "%s, %s", m.Addr(j*aes.BlockSize), a.stream[4*i+j])
+	}
+}
+
+func (a AESNI) StoreLane(g Generator, i int, m Array) {
+	for j := 0; j < 4; j++ {
+		g.inst("MOVOU", "%s, %s", a.stream[4*i+j], m.Addr(j*aes.BlockSize))
+	}
+}
+
+func (a AESNI) AESLoad(g Generator, i int, m Array) {
+	for j := 0; j < 4; j++ {
+		ref := a.stream[4*i+j]
+		g.inst("VAESDEC", "%s, %s, %s", m.Addr(j*aes.BlockSize), ref, ref)
+	}
+}
+
+func (a AESNI) AESMerge(g Generator, i, j int) {
+	for k := 0; k < 4; k++ {
+		g.inst("VAESDEC", "%s, %s, %s", a.stream[4*j+k], a.stream[4*i+k], a.stream[4*i+k])
+	}
+}
+
+func (a AESNI) Rotate(g Generator, i int) {
+	l := a.stream[4*i : 4*i+4]
+	t := l[0]
+	l[0] = l[1]
+	l[1] = l[2]
+	l[2] = l[3]
+	l[3] = t
+}
 
 // VAES256 implements the VAES 256-bit backend.
 type VAES256 struct{}
 
-func (v VAES256) Width() int { return 256 }
+func (v VAES256) Width() int               { return 256 }
+func (v VAES256) StackAlloc(f *StackFrame) {}
 
 // VAES512 implements the VAES 512-bit backend.
 type VAES512 struct{}
 
-func (v VAES512) Width() int { return 512 }
+func (v VAES512) Width() int               { return 512 }
+func (v VAES512) StackAlloc(f *StackFrame) {}
+
+func (v VAES512) LoadLane(g Generator, m Array, i int) {
+	g.inst("VMOVDQU64", "%s, Z%d", m.Addr(0), i)
+}
+
+func (v VAES512) StoreLane(g Generator, i int, m Array) {
+	g.inst("VMOVDQU64", "Z%d, %s", i, m.Addr(0))
+}
+
+func (v VAES512) AESLoad(g Generator, i int, m Array) {
+	g.inst("VAESDEC", "%s, Z%d, Z%d", m.Addr(0), i, i)
+}
+
+func (v VAES512) AESMerge(g Generator, i, j int) {
+	g.inst("VAESDEC", "Z%d, Z%d, Z%d", j, i, i)
+}
+
+func (v VAES512) R0(g Generator) int { return 4 }
+
+func (v VAES512) Rotate(g Generator, i int) {}
 
 // Meow writes an assembly implementation of Meow hash components.
 type Meow struct {
@@ -98,19 +209,19 @@ func NewMeow(w io.Writer) *Meow {
 func (m *Meow) Generate() error {
 	m.header()
 
-	m.checksum(AESNI{})
-	m.checksum(VAES256{})
-	m.checksum(VAES512{})
+	m.checksum(NewAESNI())
+	//m.checksum(&VAES256{})
+	m.checksum(&VAES512{})
 
 	return m.err
 }
 
 // checksum outputs the entire checksum function.
 func (m *Meow) checksum(b Backend) {
-	f := StackFrame{}
-	iv := f.Alloc(16)
+	f := &StackFrame{}
+	iv := f.Alloc(LaneSize)
 	partial := f.Alloc(BlockSize)
-	spill := f.Alloc(64)
+	b.StackAlloc(f)
 
 	name := fmt.Sprintf("checksum%d", b.Width())
 	m.text(name, f.Size, 56)
@@ -121,30 +232,33 @@ func (m *Meow) checksum(b Backend) {
 	m.arg("src_len", 40, "AX")
 
 	m.section("Prepare IV.")
-	m.alloc("IV", "R9")
-	m.inst("MOVQ", "SEED, IV")
-	m.inst("MOVQ", "IV, %s", iv.Addr(0))
-	m.inst("ADDQ", "SRC_LEN, IV")
-	m.inst("INCQ", "IV")
-	m.inst("MOVQ", "IV, %s", iv.Addr(8))
-
-	m.section("Load IV.")
-	for i := 0; i < 16; i++ {
-		m.inst("MOVOU", "%s, X%d", iv.Addr(0), i)
+	m.alloc("IV0", "R9")
+	m.alloc("IV1", "R10")
+	m.inst("MOVQ", "SEED, IV0")
+	m.inst("MOVQ", "SEED, IV1")
+	m.inst("ADDQ", "SRC_LEN, IV1")
+	m.inst("INCQ", "IV1")
+	for i := 0; i < LaneSize; i += 8 {
+		m.inst("MOVQ", "IV%d, %s", (i%16)/8, iv.Addr(i))
 	}
 
-	m.blockloop("residual")
+	m.section("Load IV.")
+	for l := 0; l < 4; l++ {
+		b.LoadLane(m, iv, l)
+	}
+
+	m.blockloop(b, "residual")
 
 	m.label("residual")
 	m.inst("CMPQ", "SRC_LEN, $0")
 	m.inst("JE", "finish")
 
 	m.section("Duplicate IV.")
-	m.inst("MOVQ", "%s, R10", iv.Addr(0))
-	m.inst("MOVQ", "%s, R11", iv.Addr(8))
+	m.inst("MOVQ", "%s, R11", iv.Addr(0))
+	m.inst("MOVQ", "%s, R12", iv.Addr(8))
 	for i := 0; i < BlockSize; i += 16 {
-		m.inst("MOVQ", "R10, %s", partial.Addr(i))
-		m.inst("MOVQ", "R11, %s", partial.Addr(i+8))
+		m.inst("MOVQ", "R11, %s", partial.Addr(i))
+		m.inst("MOVQ", "R12, %s", partial.Addr(i+8))
 	}
 
 	m.alloc("BLOCK_PTR", "BX")
@@ -157,62 +271,45 @@ func (m *Meow) checksum(b Backend) {
 	m.inst("DECQ", "SRC_LEN")
 	m.inst("JNE", "byteloop")
 
-	for i := 0; i < BlockSize; i += aes.BlockSize {
-		m.inst("VAESDEC", "%s, X%d, X%d", partial.Addr(i), i/aes.BlockSize, i/aes.BlockSize)
+	for l := 0; l < 4; l++ {
+		b.AESLoad(m, l, partial.Slice(l*LaneSize))
 	}
 
 	m.label("finish")
 
-	s := make([]string, 16)
-	for i := 0; i < 16; i++ {
-		s[i] = fmt.Sprintf("X%d", i)
-	}
-
-	for i := 0; i < 4; i++ {
-		addr := spill.Addr(16 * i)
-		m.inst("MOVOU", "X%d, %s", i, addr)
-		s[i] = addr
-	}
-
-	for i := 0; i < 4; i++ {
-		m.inst("MOVOU", "%s, X%d", iv.Addr(0), i)
-	}
+	r0 := b.R0(m)
+	b.LoadLane(m, iv, r0)
 
 	for r := 0; r < 4; r++ {
 		m.section(fmt.Sprintf("Rotation block %d.", r))
-		for i := 0; i < 4; i++ {
-			for j := 0; j < 4; j++ {
-				idx := 4*i + (j+r)%4
-				m.inst("VAESDEC", "%s, X%d, X%d", s[idx], j, j)
-			}
+		for l := 0; l < 4; l++ {
+			b.AESMerge(m, r0, l)
+			b.Rotate(m, l)
 		}
 	}
 
 	m.section("Final merge.")
 	for i := 0; i < 5; i++ {
-		for j := 0; j < 4; j++ {
-			m.inst("VAESDEC", "%s, X%d, X%d", iv.Addr(0), j, j)
-		}
+		b.AESLoad(m, r0, iv)
 	}
 
 	m.section("Store hash.")
-	for i := 0; i < 4; i++ {
-		m.inst("MOVOU", "X%d, %d(DST_PTR)", i, 16*i)
-	}
+	b.StoreLane(m, r0, Array{Base: "DST_PTR"})
 
 	m.inst("RET", "")
 	m.undefall()
 }
 
 // blockloop outputs a loop to encrypt entire blocks, exiting to the provided label.
-func (m *Meow) blockloop(exit string) {
+func (m *Meow) blockloop(b Backend, exit string) {
 	m.label("loop")
 	m.inst("CMPQ", "SRC_LEN, $%d", BlockSize)
 	m.inst("JL", exit)
 
 	m.section("Hash block.")
-	for i := 0; i < BlockSize; i += aes.BlockSize {
-		m.inst("VAESDEC", "%d(SRC_PTR), X%d, X%d", i, i/aes.BlockSize, i/aes.BlockSize)
+	src := Array{Base: "SRC_PTR"}
+	for l := 0; l < 4; l++ {
+		b.AESLoad(m, l, src.Slice(l*LaneSize))
 	}
 
 	m.section("Update source pointer.")
