@@ -37,6 +37,7 @@ func main() {
 // Generator is an interface for assembly generation.
 type Generator interface {
 	inst(name, format string, args ...interface{})
+	data64(name string, x []uint64)
 }
 
 // Array represents a byte array based at Offset.
@@ -71,6 +72,9 @@ func (s *StackFrame) Alloc(size int) Array {
 type Backend interface {
 	// Width is the register width in bits.
 	Width() int
+
+	// Preamble allows the backend to output assembly prior to the TEXT section.
+	Preamble(g Generator)
 
 	// StackAlloc allocates necessary space on the stack for the given number of lanes.
 	StackAlloc(*StackFrame)
@@ -111,6 +115,8 @@ func NewAESNI() *AESNI {
 }
 
 func (a AESNI) Width() int { return 128 }
+
+func (a AESNI) Preamble(g Generator) {}
 
 func (a *AESNI) StackAlloc(f *StackFrame) {
 	a.spill = f.Alloc(LaneSize)
@@ -168,7 +174,12 @@ func (v VAES256) StackAlloc(f *StackFrame) {}
 // VAES512 implements the VAES 512-bit backend.
 type VAES512 struct{}
 
-func (v VAES512) Width() int               { return 512 }
+func (v VAES512) Width() int { return 512 }
+
+func (v VAES512) Preamble(g Generator) {
+	g.data64("rotate512", []uint64{2, 3, 4, 5, 6, 7, 0, 1})
+}
+
 func (v VAES512) StackAlloc(f *StackFrame) {}
 
 func (v VAES512) LoadLane(g Generator, m Array, i int) {
@@ -189,7 +200,11 @@ func (v VAES512) AESMerge(g Generator, i, j int) {
 
 func (v VAES512) R0(g Generator) int { return 4 }
 
-func (v VAES512) Rotate(g Generator, i int) {}
+func (v VAES512) Rotate(g Generator, i int) {
+	g.inst("LEAQ", "rotate512<>(SB), R15")
+	g.inst("VMOVDQU64", "(R15), Z15")
+	g.inst("VPERMQ", "Z%d, Z15, Z%d", i, i)
+}
 
 // Meow writes an assembly implementation of Meow hash components.
 type Meow struct {
@@ -218,6 +233,8 @@ func (m *Meow) Generate() error {
 
 // checksum outputs the entire checksum function.
 func (m *Meow) checksum(b Backend) {
+	b.Preamble(m)
+
 	f := &StackFrame{}
 	iv := f.Alloc(LaneSize)
 	partial := f.Alloc(BlockSize)
@@ -334,6 +351,14 @@ func (m *Meow) section(description string) {
 // label defines a label.
 func (m *Meow) label(name string) {
 	m.printf("\n%s:\n", name)
+}
+
+// data64 outputs a DATA section.
+func (m *Meow) data64(name string, x []uint64) {
+	for i := range x {
+		m.printf("\nDATA %s<>+0x%02x(SB)/8, $0x%016x", name, 8*i, x[i])
+	}
+	m.printf("\nGLOBL %s<>(SB), (NOPTR+RODATA), $%d\n", name, 8*len(x))
 }
 
 // text defines a function header.
