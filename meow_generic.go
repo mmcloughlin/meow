@@ -7,62 +7,56 @@ import (
 
 // fallback is a pure go implementation of Meow checksum.
 func fallback(seed uint64, dst, src []byte) {
-	// Build IV.
-	var iv [64]byte
-	for i := 0; i < 64; i += 16 {
-		binary.LittleEndian.PutUint64(iv[i+0:], seed)
-		binary.LittleEndian.PutUint64(iv[i+8:], seed+uint64(len(src))+1)
+	// Initialize streams.
+	var s [BlockSize]byte
+
+	// Handle full 256-byte blocks.
+	cur := src
+	for len(cur) >= BlockSize {
+		for i := 0; i < BlockSize; i += aes.BlockSize {
+			aesdec(cur[i:], s[i:], s[i:])
+		}
+		cur = cur[BlockSize:]
 	}
 
-	// Initialize streams with IV.
-	var s [BlockSize]byte
-	copy(s[0:], iv[:])
-	copy(s[64:], iv[:])
-	copy(s[128:], iv[:])
-	copy(s[192:], iv[:])
-
-	// Handle full blocks.
-	for len(src) >= BlockSize {
-		for i := 0; i < BlockSize; i += aes.BlockSize {
-			aesdec(src[i:], s[i:], s[i:])
-		}
-		src = src[BlockSize:]
+	// Handle full 16-byte blocks.
+	i := 0
+	for len(cur) >= aes.BlockSize {
+		aesdec(cur, s[i:], s[i:])
+		cur = cur[aes.BlockSize:]
+		i += aes.BlockSize
 	}
 
 	// Partial block.
-	if len(src) > 0 {
-		var p [BlockSize]byte
-		copy(p[0:], iv[:])
-		copy(p[64:], iv[:])
-		copy(p[128:], iv[:])
-		copy(p[192:], iv[:])
-		copy(p[0:], src)
-
-		for i := 0; i < BlockSize; i += aes.BlockSize {
-			aesdec(p[i:], s[i:], s[i:])
+	if len(cur) > 0 {
+		var partial []byte
+		if len(src) >= aes.BlockSize {
+			partial = src[len(src)-aes.BlockSize:]
+		} else {
+			partial = make([]byte, aes.BlockSize)
+			copy(partial[:], cur)
 		}
+
+		aesdec(partial, s[15*aes.BlockSize:], s[15*aes.BlockSize:])
 	}
 
-	// Rotations.
-	var r [Size]byte
-	copy(r[:], iv[:])
-	for t := 0; t < 4; t++ {
-		for j := 0; j < 4; j++ {
-			for i := 0; i < 4; i++ {
-				idx := 4*j + (i+t)%4
-				aesdec(s[idx*aes.BlockSize:], r[i*aes.BlockSize:], r[i*aes.BlockSize:])
-			}
-		}
+	// Combine.
+	m0 := s[7*aes.BlockSize : 8*aes.BlockSize]
+	ordering := []int{10, 4, 5, 12, 8, 0, 1, 9, 13, 2, 6, 14, 3, 11, 15}
+	for _, i := range ordering {
+		aesdec(s[i*aes.BlockSize:], m0, m0)
 	}
 
-	// Final merge.
-	for t := 0; t < 5; t++ {
-		for i := 0; i < Size; i += aes.BlockSize {
-			aesdec(iv[i:], r[i:], r[i:])
-		}
+	// Mixer.
+	var mixer [aes.BlockSize]byte
+	binary.LittleEndian.PutUint64(mixer[:], seed-uint64(len(src)))
+	binary.LittleEndian.PutUint64(mixer[8:], seed+uint64(len(src))+1)
+
+	for i := 0; i < 3; i++ {
+		aesdec(mixer[:], m0, m0)
 	}
 
-	copy(dst, r[:])
+	copy(dst, m0)
 }
 
 // aesdec performs one round of AES decryption.
