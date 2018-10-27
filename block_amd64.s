@@ -4,7 +4,7 @@
 
 #include "textflag.h"
 
-TEXT ·checksum128(SB),0,$16-56
+TEXT ·checksum128(SB),0,$32-56
 #define SEED R8
 	MOVQ     seed+0(FP), SEED
 #define DST_PTR DI
@@ -14,9 +14,21 @@ TEXT ·checksum128(SB),0,$16-56
 #define SRC_LEN AX
 	MOVQ     src_len+40(FP), SRC_LEN
 
+	// Allocate general purpose registers.
+#define TOTAL_LEN R9
+#define MIX0 R10
+#define MIX1 R11
+#define PARTIAL_PTR R12
+#define TMP R13
+#define ZERO R15
+
+	// Prepare a zero register.
+	XORQ     ZERO, ZERO
+
+	// Backup total input length.
+	MOVQ     SRC_LEN, TOTAL_LEN
+
 	// Prepare Mixer.
-#define MIX0 R9
-#define MIX1 R10
 	MOVQ     SEED, MIX0
 	SUBQ     SRC_LEN, MIX0
 	MOVQ     SEED, MIX1
@@ -154,8 +166,28 @@ sub256:
 	// Handle final sub 16-byte block.
 
 sub16:
+	CMPQ     SRC_LEN, $0
+	JE       combine
+	MOVQ     ZERO, 16(SP)
+	MOVQ     ZERO, 24(SP)
+	LEAQ     16(SP), PARTIAL_PTR
+	CMPQ     TOTAL_LEN, $16
+	JB       byteloop
+	LEAQ     -16(SRC_PTR)(SRC_LEN*1), SRC_PTR
+	MOVQ     $16, SRC_LEN
+
+byteloop:
+	MOVB     (SRC_PTR), TMP
+	MOVB     TMP, (PARTIAL_PTR)
+	INCQ     SRC_PTR
+	INCQ     PARTIAL_PTR
+	DECQ     SRC_LEN
+	JNE      byteloop
+	VAESDEC  16(SP), X15, X15
 
 	// Combine.
+
+combine:
 	VAESDEC  X10, X7, X7
 	VAESDEC  X4, X7, X7
 	VAESDEC  X5, X7, X7
@@ -184,5 +216,9 @@ sub16:
 #undef DST_PTR
 #undef SRC_PTR
 #undef SRC_LEN
+#undef TOTAL_LEN
 #undef MIX0
 #undef MIX1
+#undef PARTIAL_PTR
+#undef TMP
+#undef ZERO
