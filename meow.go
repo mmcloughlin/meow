@@ -2,6 +2,12 @@ package meow
 
 //go:generate go run make_block.go
 
+// Meow hash version implemented by this package.
+const (
+	Version     = 2
+	VersionName = "0.2/Ragdoll"
+)
+
 // BlockSize is the underlying block size of Meow hash in bytes.
 const BlockSize = 256
 
