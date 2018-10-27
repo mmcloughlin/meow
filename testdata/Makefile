@@ -20,7 +20,10 @@ meow_hash.h:
 	wget https://raw.githubusercontent.com/cmuratori/meow_hash/master/meow_hash.h
 
 testvectors.json: testvectors
-	./$< > $@
+	./$< | tee $@ | python -m json.tool > /dev/null # pipe through python to catch a json mistake
 
 clean:
 	$(RM) $(progs) testvectors.json
+
+distclean: clean
+	$(RM) meow_hash.h
