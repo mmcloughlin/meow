@@ -14,10 +14,7 @@ import (
 	"strings"
 )
 
-const (
-	LaneSize  = 4 * aes.BlockSize
-	BlockSize = 256
-)
+const BlockSize = 256
 
 var output = flag.String("out", "block_amd64.s", "output filename")
 
@@ -37,7 +34,6 @@ func main() {
 // Generator is an interface for assembly generation.
 type Generator interface {
 	inst(name, format string, args ...interface{})
-	data64(name string, x []uint64)
 }
 
 // Array represents a byte array based at Offset.
@@ -114,42 +110,6 @@ func (a AESNI) AESMerge(s, t int) {
 func (a AESNI) Store(i int, m Array) {
 	a.g.inst("MOVOU", "X%d, %s", i, m.Addr(0))
 }
-
-//func (a *AESNI) StackAlloc(f *StackFrame) {
-//	a.spill = f.Alloc(LaneSize)
-//}
-//
-//func (a *AESNI) R0(g Generator) int {
-//	a.StoreLane(g, 0, a.spill)
-//	for i := 0; i < 4; i++ {
-//		a.stream[i] = a.spill.Addr(16 * i)
-//		a.stream = append(a.stream, fmt.Sprintf("X%d", i))
-//	}
-//	return 4
-//}
-//
-//func (a AESNI) LoadLane(g Generator, m Array, i int) {
-//	for j := 0; j < 4; j++ {
-//		g.inst("MOVOU", "%s, %s", m.Addr(j*aes.BlockSize), a.stream[4*i+j])
-//	}
-//}
-//
-//
-//
-//func (a AESNI) AESMerge(g Generator, i, j int) {
-//	for k := 0; k < 4; k++ {
-//		g.inst("VAESDEC", "%s, %s, %s", a.stream[4*j+k], a.stream[4*i+k], a.stream[4*i+k])
-//	}
-//}
-//
-//func (a AESNI) Rotate(g Generator, i int) {
-//	l := a.stream[4*i : 4*i+4]
-//	t := l[0]
-//	l[0] = l[1]
-//	l[1] = l[2]
-//	l[2] = l[3]
-//	l[3] = t
-//}
 
 // Meow writes an assembly implementation of Meow hash components.
 type Meow struct {
@@ -303,14 +263,6 @@ func (m *Meow) section(description string) {
 // label defines a label.
 func (m *Meow) label(name string) {
 	m.printf("\n%s:\n", name)
-}
-
-// data64 outputs a DATA section.
-func (m *Meow) data64(name string, x []uint64) {
-	for i := range x {
-		m.printf("\nDATA %s<>+0x%02x(SB)/8, $0x%016x", name, 8*i, x[i])
-	}
-	m.printf("\nGLOBL %s<>(SB), (NOPTR+RODATA), $%d\n", name, 8*len(x))
 }
 
 // text defines a function header.

@@ -9,10 +9,8 @@ script:
 - cmp block_amd64.s ${block}
 # run tests
 - go test -v
-# test fallback
-- go test -v -tags noasm
 # ensure we can build the testvector generator
-- make -C testdata testvectors
+- make -C testdata distclean testvectors
 - tv=$(mktemp)
 - ./testdata/testvectors -s 42 >${tv}
 - go test -v -testvectors ${tv}
