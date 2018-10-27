@@ -76,8 +76,14 @@ type Backend interface {
 	// Zero all streams.
 	Zero()
 
-	// AESLoad encrypts streams with key from memory.
-	AESLoad(m Array)
+	// AESLoad encrypts stream s with key from memory.
+	AESLoad(s int, m Array)
+
+	// AESMerge merges stream s with stream t.
+	AESMerge(s, t int)
+
+	// Store stream s to memory location m.
+	Store(s int, m Array)
 }
 
 // AESNI implements the AES-NI backend.
@@ -97,10 +103,16 @@ func (a AESNI) Zero() {
 	}
 }
 
-func (a AESNI) AESLoad(m Array) {
-	for s := 0; s < 16; s++ {
-		a.g.inst("VAESDEC", "%s, X%d, X%d", m.Addr(s*aes.BlockSize), s, s)
-	}
+func (a AESNI) AESLoad(s int, m Array) {
+	a.g.inst("VAESDEC", "%s, X%d, X%d", m.Addr(0), s, s)
+}
+
+func (a AESNI) AESMerge(s, t int) {
+	a.g.inst("VAESDEC", "X%d, X%d, X%d", t, s, s)
+}
+
+func (a AESNI) Store(i int, m Array) {
+	a.g.inst("MOVOU", "X%d, %s", i, m.Addr(0))
 }
 
 //func (a *AESNI) StackAlloc(f *StackFrame) {
@@ -122,11 +134,6 @@ func (a AESNI) AESLoad(m Array) {
 //	}
 //}
 //
-//func (a AESNI) StoreLane(g Generator, i int, m Array) {
-//	for j := 0; j < 4; j++ {
-//		g.inst("MOVOU", "%s, %s", a.stream[4*i+j], m.Addr(j*aes.BlockSize))
-//	}
-//}
 //
 //
 //func (a AESNI) AESMerge(g Generator, i, j int) {
@@ -170,6 +177,8 @@ func (m *Meow) Generate() error {
 // checksum outputs the entire checksum function.
 func (m *Meow) checksum(b Backend) {
 	f := &StackFrame{}
+	mixer := f.Alloc(aes.BlockSize)
+
 	name := fmt.Sprintf("checksum%d", b.Width())
 	m.text(name, f.Size, 56)
 
@@ -178,68 +187,66 @@ func (m *Meow) checksum(b Backend) {
 	m.arg("src_ptr", 32, "SI")
 	m.arg("src_len", 40, "AX")
 
+	m.section("Prepare Mixer.")
+	m.alloc("MIX0", "R9")
+	m.alloc("MIX1", "R10")
+	m.inst("MOVQ", "SEED, MIX0")
+	m.inst("SUBQ", "SRC_LEN, MIX0")
+	m.inst("MOVQ", "SEED, MIX1")
+	m.inst("ADDQ", "SRC_LEN, MIX1")
+	m.inst("INCQ", "MIX1")
+
+	for i := 0; i < 2; i++ {
+		m.inst("MOVQ", "MIX%d, %s", i, mixer.Addr(8*i))
+	}
+
 	m.section("Load zero \"IV\".")
 	b.Zero()
 
 	m.section(fmt.Sprintf("Handle full %d-byte blocks.", BlockSize))
 	m.label("loop")
 	m.inst("CMPQ", "SRC_LEN, $%d", BlockSize)
-	m.inst("JL", "residual")
+	m.inst("JB", "sub256")
 
 	m.section("Hash block.")
-	b.AESLoad(Array{Base: "SRC_PTR"})
+	src := Array{Base: "SRC_PTR"}
+	for i := 0; i < 16; i++ {
+		b.AESLoad(i, src.Slice(i*aes.BlockSize))
+	}
 
 	m.section("Update source pointer.")
 	m.inst("ADDQ", "$%d, SRC_PTR", BlockSize)
 	m.inst("SUBQ", "$%d, SRC_LEN", BlockSize)
 	m.inst("JMP", "loop")
 
-	m.label("residual")
-	//m.inst("CMPQ", "SRC_LEN, $0")
-	//m.inst("JE", "finish")
+	m.section(fmt.Sprintf("Handle final sub %d-byte block.", BlockSize))
+	m.label("sub256")
+	for i := 0; i < BlockSize-aes.BlockSize; i += aes.BlockSize {
+		m.inst("CMPQ", "SRC_LEN, $%d", aes.BlockSize)
+		m.inst("JB", "sub16")
+		b.AESLoad(i/aes.BlockSize, src)
+		m.inst("ADDQ", "$%d, SRC_PTR", aes.BlockSize)
+		m.inst("SUBQ", "$%d, SRC_LEN", aes.BlockSize)
+	}
 
-	//m.section("Duplicate IV.")
-	//m.inst("MOVQ", "%s, R11", iv.Addr(0))
-	//m.inst("MOVQ", "%s, R12", iv.Addr(8))
-	//for i := 0; i < BlockSize; i += 16 {
-	//	m.inst("MOVQ", "R11, %s", partial.Addr(i))
-	//	m.inst("MOVQ", "R12, %s", partial.Addr(i+8))
-	//}
+	m.section(fmt.Sprintf("Handle final sub %d-byte block.", aes.BlockSize))
+	m.label("sub16")
+	// TODO(mbm): implement sub16
 
-	//m.alloc("BLOCK_PTR", "BX")
-	//m.inst("LEAQ", "%s, BLOCK_PTR", partial.Addr(0))
-	//m.label("byteloop")
-	//m.inst("MOVB", "(SRC_PTR), R10")
-	//m.inst("MOVB", "R10, (BX)")
-	//m.inst("INCQ", "SRC_PTR")
-	//m.inst("INCQ", "BLOCK_PTR")
-	//m.inst("DECQ", "SRC_LEN")
-	//m.inst("JNE", "byteloop")
+	m.section("Combine.")
+	m0 := 7
+	ordering := []int{10, 4, 5, 12, 8, 0, 1, 9, 13, 2, 6, 14, 3, 11, 15}
+	for _, s := range ordering {
+		b.AESMerge(m0, s)
+	}
 
-	//for l := 0; l < 4; l++ {
-	//	b.AESLoad(m, l, partial.Slice(l*LaneSize))
-	//}
+	m.section("Mixing.")
+	for i := 0; i < 3; i++ {
+		b.AESLoad(m0, mixer)
+	}
 
-	//m.label("finish")
-
-	//r0 := b.R0(m)
-	//b.LoadLane(m, iv, r0)
-
-	//for r := 0; r < 4; r++ {
-	//	m.section(fmt.Sprintf("Rotation block %d.", r))
-	//	for l := 0; l < 4; l++ {
-	//		b.AESMerge(m, r0, l)
-	//		b.Rotate(m, l)
-	//	}
-	//}
-
-	//m.section("Final merge.")
-	//for i := 0; i < 5; i++ {
-	//	b.AESLoad(m, r0, iv)
-	//}
-
-	//m.section("Store hash.")
-	//b.StoreLane(m, r0, Array{Base: "DST_PTR"})
+	m.section("Store hash.")
+	b.Store(m0, Array{Base: "DST_PTR"})
 
 	m.inst("RET", "")
 	m.undefall()
