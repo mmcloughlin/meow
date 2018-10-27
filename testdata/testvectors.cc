@@ -12,10 +12,10 @@
 uint64_t rand_uint64()
 {
     uint64_t x = 0;
-    x = (x << 16) | (rand() & 0xff);
-    x = (x << 16) | (rand() & 0xff);
-    x = (x << 16) | (rand() & 0xff);
-    x = (x << 16) | (rand() & 0xff);
+    x = (x << 16) | (rand() & 0xffff);
+    x = (x << 16) | (rand() & 0xffff);
+    x = (x << 16) | (rand() & 0xffff);
+    x = (x << 16) | (rand() & 0xffff);
     return x;
 }
 
@@ -112,15 +112,34 @@ void output_test_vectors(size_t *lengths, size_t n)
     printf("}\n");
 }
 
-// Generate lengths populates an array with lengths of the form (a*i)%m for i <= n.
-size_t *generate_lengths(size_t a, size_t m, size_t n)
+// Populate array with lengths of the form (a * i)%m for i < n
+void modulo_lengths(size_t *lengths, size_t a, size_t m, size_t n)
 {
-    size_t *lengths = (size_t *)malloc(n * sizeof(size_t));
-    assert(lengths);
     for (size_t i = 0; i < n; i++)
     {
         lengths[i] = (i * a) % m;
     }
+}
+
+// Generate collection of test vector lengths.
+size_t *generate_lengths(size_t *n)
+{
+    size_t num_small = 32;
+    size_t num_modulo = 256;
+
+    *n = num_small + num_modulo;
+    size_t *lengths = (size_t *)malloc(*n * sizeof(size_t));
+    assert(lengths);
+
+    // Ensure we have examples of small hash inputs.
+    for (size_t i = 0; i < num_small; i++)
+    {
+        lengths[i] = i;
+    }
+
+    // Modulo lengths provides larger hash inputs of all possible values modulo 256.
+    modulo_lengths(lengths + num_small, 251, 8 << 10, num_modulo);
+
     return lengths;
 }
 
@@ -137,8 +156,8 @@ int main(int argc, char **argv)
         }
     }
 
-    size_t n = 256;
-    size_t *lengths = generate_lengths(251, 8 << 10, n);
+    size_t n;
+    size_t *lengths = generate_lengths(&n);
     output_test_vectors(lengths, n);
     free(lengths);
 }
