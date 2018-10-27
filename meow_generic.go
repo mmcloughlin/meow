@@ -10,21 +10,13 @@ func fallback(seed uint64, dst, src []byte) {
 	// Initialize streams.
 	var s [BlockSize]byte
 
-	// Handle full 256-byte blocks.
+	// Handle 16-byte blocks.
 	cur := src
-	for len(cur) >= BlockSize {
-		for i := 0; i < BlockSize; i += aes.BlockSize {
-			aesdec(cur[i:], s[i:], s[i:])
-		}
-		cur = cur[BlockSize:]
-	}
-
-	// Handle full 16-byte blocks.
 	i := 0
 	for len(cur) >= aes.BlockSize {
 		aesdec(cur, s[i:], s[i:])
 		cur = cur[aes.BlockSize:]
-		i += aes.BlockSize
+		i = (i + aes.BlockSize) % BlockSize
 	}
 
 	// Partial block.
