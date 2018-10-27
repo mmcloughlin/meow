@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"io/ioutil"
+	"strconv"
 	"testing"
 
 	"github.com/mmcloughlin/meow"
@@ -14,53 +15,77 @@ import (
 var testVectorsFilename = flag.String("testvectors", "testdata/testvectors.json", "test vectors filename")
 
 type TestVector struct {
-	Seed  uint64
-	Input []byte
-	Hash  []byte
+	Seed   uint64
+	Input  []byte
+	Hash   []byte
+	Hash64 uint64
+	Hash32 uint32
 }
 
-func LoadTestVectors(t *testing.T) []TestVector {
+func (v *TestVector) UnmarshalJSON(b []byte) error {
+	var data struct {
+		Seed   string `json:"seed"`
+		Input  string `json:"input"`
+		Hash   string `json:"hash"`
+		Hash64 string `json:"hash64"`
+		Hash32 string `json:"hash32"`
+	}
+
+	var err error
+
+	if err = json.Unmarshal(b, &data); err != nil {
+		return err
+	}
+
+	if v.Seed, err = strconv.ParseUint(data.Seed, 16, 64); err != nil {
+		return err
+	}
+
+	if v.Input, err = hex.DecodeString(data.Input); err != nil {
+		return err
+	}
+
+	if v.Hash, err = hex.DecodeString(data.Hash); err != nil {
+		return err
+	}
+
+	if v.Hash64, err = strconv.ParseUint(data.Hash64, 16, 64); err != nil {
+		return err
+	}
+
+	h32, err := strconv.ParseUint(data.Hash32, 16, 32)
+	if err != nil {
+		return err
+	}
+	v.Hash32 = uint32(h32)
+
+	return nil
+}
+
+type TestData struct {
+	Version     int          `json:"version_number"`
+	VersionName string       `json:"version_name"`
+	TestVectors []TestVector `json:"test_vectors"`
+}
+
+func LoadTestData(t *testing.T) TestData {
 	t.Helper()
 	b, err := ioutil.ReadFile(*testVectorsFilename)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var data []struct {
-		SeedLo   uint64 `json:"seed_lo"`
-		SeedHi   uint64 `json:"seed_hi"`
-		InputHex string `json:"input_hex"`
-		HashHex  string `json:"hash_hex"`
-	}
-	if err := json.Unmarshal(b, &data); err != nil {
+	var testdata TestData
+	if err := json.Unmarshal(b, &testdata); err != nil {
 		t.Fatal(err)
 	}
 
-	var vs []TestVector
-	for _, d := range data {
-		in, err := hex.DecodeString(d.InputHex)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		h, err := hex.DecodeString(d.HashHex)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		vs = append(vs, TestVector{
-			Seed:  (d.SeedHi << 32) | d.SeedLo,
-			Input: in,
-			Hash:  h,
-		})
-	}
-
-	return vs
+	return testdata
 }
 
 func TestVectors(t *testing.T) {
-	vs := LoadTestVectors(t)
-	for _, v := range vs {
+	testdata := LoadTestData(t)
+	for _, v := range testdata.TestVectors {
 		got := meow.Checksum(v.Seed, v.Input)
 		AssertBytesEqual(t, v.Hash, got[:])
 	}
