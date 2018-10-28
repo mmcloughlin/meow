@@ -15,7 +15,7 @@ install:
 - curl --verbose
        --cookie jar.txt
        --output sde.tar.bz2
-       https://software.intel.com/system/files/managed/2a/1a/${SDE_VERSION_NAME}.tar.bz2
+       https://software.intel.com/system/files/managed/2a/1a/sde-external-8.16.0-2018-01-30-lin.tar.bz2
 - export SDE_DIR=$(mktemp)
 - tar -xf -C ${SDE_DIR} --strip-components=1 sde.tar.bz2
 script:
