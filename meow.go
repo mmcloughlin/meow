@@ -14,8 +14,11 @@ const BlockSize = 256
 // Size of a Meow checksum in bytes.
 const Size = 16
 
-// checksum is the underlying implementation. Default to pure go fallback.
-var checksum = fallback
+// Variables capturing the implementation. Default to the pure go fallback.
+var (
+	implementation = "go"
+	checksum       = fallback
+)
 
 // Checksum returns the Meow checksum of data.
 func Checksum(seed uint64, data []byte) [Size]byte {
