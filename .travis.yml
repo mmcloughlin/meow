@@ -32,7 +32,7 @@ script:
 
 # run tests inside SDE
 - go test -c
-- for chip in hsw icl future; do ${SDE_BIN} -${SDE_CHIP} -- ./meow.test -test.v; done
+- for chip in hsw icl future; do ${SDE_BIN} -${chip} -- ./meow.test -test.v; done
 
 # ensure we can build the testvector generator
 - make -C testdata distclean testvectors
