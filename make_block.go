@@ -64,14 +64,23 @@ func (s *StackFrame) Alloc(size int) Array {
 	return a
 }
 
-// Backend encapsulates the instruction set we are targetting.
-type Backend interface {
+// BlockEncryptor can encrypt BlockSize bytes at a time.
+type BlockEncryptor interface {
 	// Width is the register width in bits.
 	Width() int
 
 	// Zero all streams.
 	Zero()
 
+	// AESBlock encrypts an entire block.
+	AESBlock(m Array)
+
+	// LoadStreams unloads block state to stream registers X0-15.
+	LoadStreams()
+}
+
+// StreamEncryptor encrypts single AES blocks at a time.
+type StreamEncryptor interface {
 	// AESLoad encrypts stream s with key from memory.
 	AESLoad(s int, m Array)
 
@@ -99,9 +108,17 @@ func (a AESNI) Zero() {
 	}
 }
 
+func (a AESNI) AESBlock(m Array) {
+	for i := 0; i < 16; i++ {
+		a.AESLoad(i, m.Slice(i*aes.BlockSize))
+	}
+}
+
 func (a AESNI) AESLoad(s int, m Array) {
 	a.g.inst("VAESDEC", "%s, X%d, X%d", m.Addr(0), s, s)
 }
+
+func (a AESNI) LoadStreams() {}
 
 func (a AESNI) AESMerge(s, t int) {
 	a.g.inst("VAESDEC", "X%d, X%d, X%d", t, s, s)
@@ -109,6 +126,38 @@ func (a AESNI) AESMerge(s, t int) {
 
 func (a AESNI) Store(i int, m Array) {
 	a.g.inst("MOVOU", "X%d, %s", i, m.Addr(0))
+}
+
+// VAES512 implements block encryption with VAES-512.
+type VAES512 struct {
+	g Generator
+}
+
+func NewVAES512(g Generator) *VAES512 {
+	return &VAES512{g: g}
+}
+
+func (v VAES512) Width() int { return 512 }
+
+func (v VAES512) Zero() {
+	for s := 0; s < 16; s += 4 {
+		i := 16 + (s / 4)
+		v.g.inst("VPXORQ", "Z%d, Z%d, Z%d", i, i, i)
+	}
+}
+
+func (v VAES512) AESBlock(m Array) {
+	for s := 0; s < 16; s += 4 {
+		i := 16 + (s / 4)
+		v.g.inst("VAESDEC", "%s, Z%d, Z%d", m.Addr(s*aes.BlockSize), i, i)
+	}
+}
+
+func (v VAES512) LoadStreams() {
+	for s := 0; s < 16; s++ {
+		i := 16 + (s / 4)
+		v.g.inst("VEXTRACTI32X4", "$%d, Z%d, X%d", s%4, i, s)
+	}
 }
 
 // Meow writes an assembly implementation of Meow hash components.
@@ -130,17 +179,18 @@ func (m *Meow) Generate() error {
 	m.header()
 
 	m.checksum(NewAESNI(m))
+	m.checksum(NewVAES512(m))
 
 	return m.err
 }
 
 // checksum outputs the entire checksum function.
-func (m *Meow) checksum(b Backend) {
+func (m *Meow) checksum(e BlockEncryptor) {
 	f := &StackFrame{}
 	mixer := f.Alloc(aes.BlockSize)
 	partial := f.Alloc(aes.BlockSize)
 
-	name := fmt.Sprintf("checksum%d", b.Width())
+	name := fmt.Sprintf("checksum%d", e.Width())
 	m.text(name, f.Size, 56)
 
 	m.arg("seed", 0, "R8")
@@ -174,7 +224,7 @@ func (m *Meow) checksum(b Backend) {
 	}
 
 	m.section("Load zero \"IV\".")
-	b.Zero()
+	e.Zero()
 
 	m.section(fmt.Sprintf("Handle full %d-byte blocks.", BlockSize))
 	m.label("loop")
@@ -183,17 +233,20 @@ func (m *Meow) checksum(b Backend) {
 
 	m.section("Hash block.")
 	src := Array{Base: "SRC_PTR"}
-	for i := 0; i < 16; i++ {
-		b.AESLoad(i, src.Slice(i*aes.BlockSize))
-	}
+	e.AESBlock(src)
 
 	m.section("Update source pointer.")
 	m.inst("ADDQ", "$%d, SRC_PTR", BlockSize)
 	m.inst("SUBQ", "$%d, SRC_LEN", BlockSize)
 	m.inst("JMP", "loop")
 
+	// The remainder is single block encryptions only, so handled with AES-NI.
+	b := NewAESNI(m)
+
 	m.section(fmt.Sprintf("Handle final sub %d-byte block.", BlockSize))
 	m.label("sub256")
+	e.LoadStreams()
+
 	for i := 0; i < BlockSize-aes.BlockSize; i += aes.BlockSize {
 		m.inst("CMPQ", "SRC_LEN, $%d", aes.BlockSize)
 		m.inst("JB", "sub16")
