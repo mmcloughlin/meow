@@ -128,6 +128,38 @@ func (a AESNI) Store(i int, m Array) {
 	a.g.inst("MOVOU", "X%d, %s", i, m.Addr(0))
 }
 
+// VAES256 implements block encryption with VAES-256.
+type VAES256 struct {
+	g Generator
+}
+
+func NewVAES256(g Generator) *VAES256 {
+	return &VAES256{g: g}
+}
+
+func (v VAES256) Width() int { return 256 }
+
+func (v VAES256) Zero() {
+	for s := 0; s < 16; s += 2 {
+		i := 16 + (s / 2)
+		v.g.inst("VPXORQ", "Y%d, Y%d, Y%d", i, i, i)
+	}
+}
+
+func (v VAES256) AESBlock(m Array) {
+	for s := 0; s < 16; s += 2 {
+		i := 16 + (s / 2)
+		v.g.inst("VAESDEC", "%s, Y%d, Y%d", m.Addr(s*aes.BlockSize), i, i)
+	}
+}
+
+func (v VAES256) LoadStreams() {
+	for s := 0; s < 16; s++ {
+		i := 16 + (s / 2)
+		v.g.inst("VEXTRACTI32X4", "$%d, Y%d, X%d", s%2, i, s)
+	}
+}
+
 // VAES512 implements block encryption with VAES-512.
 type VAES512 struct {
 	g Generator
@@ -179,6 +211,7 @@ func (m *Meow) Generate() error {
 	m.header()
 
 	m.checksum(NewAESNI(m))
+	m.checksum(NewVAES256(m))
 	m.checksum(NewVAES512(m))
 
 	return m.err
