@@ -16,7 +16,6 @@ install:
        https://software.intel.com/system/files/managed/2a/1a/${SDE_VERSION_NAME}.tar.bz2
 - tar -xf sde.tar.bz2
 - export SDE_BIN="$(pwd -P)/${SDE_VERSION_NAME}/sde64"
-- ! ${SDE_BIN} -help
 script:
 # confirm the generator script is in sync with the assembly file
 - block=$(mktemp)
