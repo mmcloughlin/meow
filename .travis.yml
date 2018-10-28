@@ -5,7 +5,6 @@ env:
 - SDE_CHIP=hsw
 - SDE_CHIP=icl
 install:
-- export SDE_VERSION_NAME="sde-external-8.16.0-2018-01-30-lin"
 - curl --verbose
        --form accept_license=1
        --form form_id=intel_licensed_dls_step_1
@@ -17,9 +16,13 @@ install:
        --cookie jar.txt
        --output sde.tar.bz2
        https://software.intel.com/system/files/managed/2a/1a/${SDE_VERSION_NAME}.tar.bz2
-- tar xf sde.tar.bz2
-- export PATH="${PATH}:${TRAVIS_BUILD_DIR}/${SDE_VERSION_NAME}"
+- export SDE_DIR=$(mktemp)
+- tar -xf -C ${SDE_DIR} --strip-components=1 sde.tar.bz2
 script:
+- ls -l ${SDE_DIR}
+- export PATH="${PATH}:${SDE_DIR}"
+- which sde
+
 # confirm the generator script is in sync with the assembly file
 - block=$(mktemp)
 - cp block_amd64.s ${block}
