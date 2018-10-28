@@ -4,6 +4,7 @@ go:
 env:
 - SDE_CHIP=icl
 install:
+- export "SDE_VERSION_NAME=sde-external-8.16.0-2018-01-30-lin"
 - curl --verbose
        --form accept_license=1
        --form form_id=intel_licensed_dls_step_1
@@ -14,14 +15,10 @@ install:
 - curl --verbose
        --cookie jar.txt
        --output sde.tar.bz2
-       https://software.intel.com/system/files/managed/2a/1a/sde-external-8.16.0-2018-01-30-lin.tar.bz2
+       https://software.intel.com/system/files/managed/2a/1a/${SDE_VERSION_NAME}.tar.bz2
 - tar -xf sde.tar.bz2
-- ls -l
+- export SDE_DIR="$(pwd -P)/${SDE_VERSION_NAME}"
 script:
-- ls -l ${SDE_DIR}
-- export PATH="${PATH}:${SDE_DIR}"
-- which sde
-
 # confirm the generator script is in sync with the assembly file
 - block=$(mktemp)
 - cp block_amd64.s ${block}
@@ -36,7 +33,7 @@ script:
 
 # run tests inside SDE
 - go test -c
-- sde -${SDE_CHIP} -- ./meow.test -test.v
+- ${SDE_DIR}/sde -${SDE_CHIP} -- ./meow.test -test.v
 
 # ensure we can build the testvector generator
 - make -C testdata distclean testvectors
