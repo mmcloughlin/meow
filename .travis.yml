@@ -2,7 +2,6 @@ language: go
 go:
 - 1.x
 env:
-- SDE_CHIP=hsw
 - SDE_CHIP=icl
 install:
 - curl --verbose
@@ -16,6 +15,7 @@ install:
        --cookie jar.txt
        --output sde.tar.bz2
        https://software.intel.com/system/files/managed/2a/1a/sde-external-8.16.0-2018-01-30-lin.tar.bz2
+- tar -xzf sde.tar.bz2
 - ls -l
 script:
 - ls -l ${SDE_DIR}
