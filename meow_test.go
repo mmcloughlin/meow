@@ -1,25 +1,25 @@
-package meow_test
+package meow
 
-import (
-	"testing"
-
-	"github.com/mmcloughlin/meow"
-)
+import "testing"
 
 func TestVectors(t *testing.T) {
 	testdata := LoadTestData(t)
 	for _, v := range testdata.TestVectors {
-		got := meow.Checksum(v.Seed, v.Input)
+		got := Checksum(v.Seed, v.Input)
 		AssertBytesEqual(t, v.Hash, got[:])
 	}
 }
 
 func TestVersions(t *testing.T) {
 	testdata := LoadTestData(t)
-	if meow.Version != testdata.Version {
-		t.Errorf("version mismatch got=%d reference=%d", meow.Version, testdata.Version)
+	if Version != testdata.Version {
+		t.Errorf("version mismatch got=%d reference=%d", Version, testdata.Version)
 	}
-	if meow.VersionName != testdata.VersionName {
-		t.Errorf("version name mismatch got=%s reference=%s", meow.VersionName, testdata.VersionName)
+	if VersionName != testdata.VersionName {
+		t.Errorf("version name mismatch got=%s reference=%s", VersionName, testdata.VersionName)
 	}
+}
+
+func TestDisplayImplementation(t *testing.T) {
+	t.Logf("implementation=%s", implementation)
 }

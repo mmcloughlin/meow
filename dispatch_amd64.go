@@ -2,6 +2,7 @@
 
 package meow
 
+// cpu contains feature flags relevant to selecting a Meow implementation.
 var cpu struct {
 	HasOSXSAVE    bool
 	HasAES        bool
@@ -19,9 +20,11 @@ func init() {
 
 	switch {
 	case cpu.HasVAES && cpu.HasAVX512F && cpu.EnabledAVX512:
+		implementation = "vaes-512"
 		checksum = checksum512
 	case cpu.HasAES && cpu.HasAVX && cpu.EnabledAVX:
 		// AVX required for VEX-encoded AES instruction, which allows non-aligned memory addresses.
+		implementation = "aes-ni"
 		checksum = checksum128
 	}
 }
@@ -50,7 +53,7 @@ func determineCPUFeatures() {
 	if cpu.HasOSXSAVE {
 		eax, _ := xgetbv()
 		cpu.EnabledAVX = (eax & 0x6) == 0x6
-		cpu.EnabledAVX512 = (eax & 0xe) == 0xe
+		cpu.EnabledAVX512 = (eax & 0xe0) == 0xe0
 	}
 
 	if maxID < 7 {

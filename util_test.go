@@ -1,4 +1,4 @@
-package meow_test
+package meow
 
 import (
 	"bytes"
