@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 )
 
-// fallback is a pure go implementation of Meow checksum.
-func fallback(seed uint64, dst, src []byte) {
+// checksumgo is a pure go implementation of Meow checksum.
+func checksumgo(seed uint64, dst, src []byte) {
 	var s [BlockSize]byte
 
 	if len(src) < aes.BlockSize {
@@ -19,8 +19,8 @@ func fallback(seed uint64, dst, src []byte) {
 	finish(seed, s[:], dst, src[n:], src[len(src)-aes.BlockSize:], uint64(len(src)))
 }
 
-// blocks hashes some number of full blocks into streams.
-func blocks(s, src []byte) {
+// blocksgo hashes some number of full blocks into streams.
+func blocksgo(s, src []byte) {
 	if len(src)%BlockSize != 0 {
 		panic("blocks can only process multiples of BlockSize")
 	}
@@ -33,7 +33,7 @@ func blocks(s, src []byte) {
 	}
 }
 
-func finish(seed uint64, s, dst, rem, trail []byte, length uint64) {
+func finishgo(seed uint64, s, dst, rem, trail []byte, length uint64) {
 	// Handle 16-byte blocks.
 	i := 0
 	for len(rem) >= aes.BlockSize {

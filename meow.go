@@ -22,7 +22,9 @@ const Size = 16
 // Variables capturing the implementation. Default to the pure go fallback.
 var (
 	implementation = "go"
-	checksum       = fallback
+	checksum       = checksumgo
+	blocks         = blocksgo
+	finish         = finishgo
 )
 
 // Checksum returns the Meow checksum of data.
@@ -39,7 +41,7 @@ func New(seed uint64) hash.Hash {
 
 // digest computes Meow hash in a streaming fashion.
 type digest struct {
-	seed   uint64
+	seed   uint64          // hash seed
 	s      [BlockSize]byte // streams
 	b      [BlockSize]byte // pending block
 	n      int             // number of (initial) bytes populated in b
