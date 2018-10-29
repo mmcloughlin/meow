@@ -19,6 +19,20 @@ func ChecksumHash(seed uint64, data []byte) []byte {
 	return h.Sum(nil)
 }
 
+// ChecksumHashWithReset is intended to confirm hash.Hash Reset() behavior.
+// Hashes some random data, resets and then computes the desired hash.
+func ChecksumHashWithReset(seed uint64, data []byte) []byte {
+	n := rand.Intn(9 << 10)
+	r := make([]byte, n)
+	rand.Read(r)
+
+	h := New(seed)
+	h.Write(r)
+	h.Reset()
+	h.Write(data)
+	return h.Sum(nil)
+}
+
 // ChecksumRandomBatchedHash implements Checksum by writing random amounts to a hash.Hash.
 func ChecksumRandomBatchedHash(seed uint64, data []byte) []byte {
 	h := New(seed)
@@ -50,6 +64,10 @@ func TestQuickChecksumMatchesHash(t *testing.T) {
 
 func TestQuickHashBatching(t *testing.T) {
 	quick.CheckEqual(ChecksumHash, ChecksumRandomBatchedHash, nil)
+}
+
+func TestQuickHashReset(t *testing.T) {
+	quick.CheckEqual(ChecksumHash, ChecksumHashWithReset, nil)
 }
 
 func TestVersions(t *testing.T) {
