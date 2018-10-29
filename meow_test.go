@@ -2,10 +2,20 @@ package meow
 
 import "testing"
 
-func TestVectors(t *testing.T) {
+func TestVectorsChecksum(t *testing.T) {
 	testdata := LoadTestData(t)
 	for _, v := range testdata.TestVectors {
 		got := Checksum(v.Seed, v.Input)
+		AssertBytesEqual(t, v.Hash, got[:])
+	}
+}
+
+func TestVectorsHash(t *testing.T) {
+	testdata := LoadTestData(t)
+	for _, v := range testdata.TestVectors {
+		h := New(v.Seed)
+		h.Write(v.Input)
+		got := h.Sum(nil)
 		AssertBytesEqual(t, v.Hash, got[:])
 	}
 }
