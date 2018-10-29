@@ -72,11 +72,17 @@ type BlockEncryptor interface {
 	// Zero all streams.
 	Zero()
 
+	// LoadStreams loads streams from memory.
+	LoadStreams(m Array)
+
+	// StoreStreams stores streams to memory.
+	StoreStreams(m Array)
+
 	// AESBlock encrypts an entire block.
 	AESBlock(m Array)
 
-	// LoadStreams unloads block state to stream registers X0-15.
-	LoadStreams()
+	// XMM unloads block state to stream registers X0-15.
+	XMM()
 }
 
 // StreamEncryptor encrypts single AES blocks at a time.
@@ -108,6 +114,18 @@ func (a AESNI) Zero() {
 	}
 }
 
+func (a AESNI) LoadStreams(m Array) {
+	for i := 0; i < 16; i++ {
+		a.g.inst("MOVOU", "%s, X%d", m.Addr(i*aes.BlockSize), i)
+	}
+}
+
+func (a AESNI) StoreStreams(m Array) {
+	for i := 0; i < 16; i++ {
+		a.g.inst("MOVOU", "X%d, %s", i, m.Addr(i*aes.BlockSize))
+	}
+}
+
 func (a AESNI) AESBlock(m Array) {
 	for i := 0; i < 16; i++ {
 		a.AESLoad(i, m.Slice(i*aes.BlockSize))
@@ -118,7 +136,7 @@ func (a AESNI) AESLoad(s int, m Array) {
 	a.g.inst("VAESDEC", "%s, X%d, X%d", m.Addr(0), s, s)
 }
 
-func (a AESNI) LoadStreams() {}
+func (a AESNI) XMM() {}
 
 func (a AESNI) AESMerge(s, t int) {
 	a.g.inst("VAESDEC", "X%d, X%d, X%d", t, s, s)
@@ -146,6 +164,20 @@ func (v VAES256) Zero() {
 	}
 }
 
+func (v VAES256) LoadStreams(m Array) {
+	for s := 0; s < 16; s += 2 {
+		i := 16 + (s / 2)
+		v.g.inst("VMOVDQU32", "%s, Y%d", m.Addr(s*aes.BlockSize), i)
+	}
+}
+
+func (v VAES256) StoreStreams(m Array) {
+	for s := 0; s < 16; s += 2 {
+		i := 16 + (s / 2)
+		v.g.inst("VMOVDQU32", "Y%d, %s", i, m.Addr(s*aes.BlockSize))
+	}
+}
+
 func (v VAES256) AESBlock(m Array) {
 	for s := 0; s < 16; s += 2 {
 		i := 16 + (s / 2)
@@ -153,7 +185,7 @@ func (v VAES256) AESBlock(m Array) {
 	}
 }
 
-func (v VAES256) LoadStreams() {
+func (v VAES256) XMM() {
 	for s := 0; s < 16; s++ {
 		i := 16 + (s / 2)
 		v.g.inst("VEXTRACTI32X4", "$%d, Y%d, X%d", s%2, i, s)
@@ -178,6 +210,20 @@ func (v VAES512) Zero() {
 	}
 }
 
+func (v VAES512) LoadStreams(m Array) {
+	for s := 0; s < 16; s += 4 {
+		i := 16 + (s / 4)
+		v.g.inst("VMOVDQU64", "%s, Z%d", m.Addr(s*aes.BlockSize), i)
+	}
+}
+
+func (v VAES512) StoreStreams(m Array) {
+	for s := 0; s < 16; s += 4 {
+		i := 16 + (s / 4)
+		v.g.inst("VMOVDQU64", "Z%d, %s", i, m.Addr(s*aes.BlockSize))
+	}
+}
+
 func (v VAES512) AESBlock(m Array) {
 	for s := 0; s < 16; s += 4 {
 		i := 16 + (s / 4)
@@ -185,7 +231,7 @@ func (v VAES512) AESBlock(m Array) {
 	}
 }
 
-func (v VAES512) LoadStreams() {
+func (v VAES512) XMM() {
 	for s := 0; s < 16; s++ {
 		i := 16 + (s / 4)
 		v.g.inst("VEXTRACTI32X4", "$%d, Z%d, X%d", s%4, i, s)
@@ -210,9 +256,16 @@ func NewMeow(w io.Writer) *Meow {
 func (m *Meow) Generate() error {
 	m.header()
 
-	m.checksum(NewAESNI(m))
-	m.checksum(NewVAES256(m))
-	m.checksum(NewVAES512(m))
+	backends := []BlockEncryptor{
+		NewAESNI(m),
+		NewVAES256(m),
+		NewVAES512(m),
+	}
+
+	for _, backend := range backends {
+		m.checksum(backend)
+		m.blocks(backend)
+	}
 
 	return m.err
 }
@@ -278,7 +331,7 @@ func (m *Meow) checksum(e BlockEncryptor) {
 
 	m.section(fmt.Sprintf("Handle final sub %d-byte block.", BlockSize))
 	m.label("sub256")
-	e.LoadStreams()
+	e.XMM()
 
 	for i := 0; i < BlockSize-aes.BlockSize; i += aes.BlockSize {
 		m.inst("CMPQ", "SRC_LEN, $%d", aes.BlockSize)
@@ -329,8 +382,38 @@ func (m *Meow) checksum(e BlockEncryptor) {
 	m.section("Store hash.")
 	b.Store(m0, Array{Base: "DST_PTR"})
 
-	m.inst("RET", "")
-	m.undefall()
+	m.ret()
+}
+
+// blocks outputs a function to hash entire blocks.
+func (m *Meow) blocks(e BlockEncryptor) {
+	f := &StackFrame{}
+	name := fmt.Sprintf("blocks%d", e.Width())
+	m.text(name, f.Size, 48)
+
+	m.arg("s_ptr", 0, "DI")
+	m.arg("src_ptr", 24, "SI")
+	m.arg("src_len", 32, "AX")
+
+	streams := Array{Base: "S_PTR"}
+	src := Array{Base: "SRC_PTR"}
+
+	e.LoadStreams(streams)
+
+	m.label("loop")
+	m.inst("CMPQ", "SRC_LEN, $%d", BlockSize)
+	m.inst("JB", "done")
+
+	e.AESBlock(src)
+
+	m.section("Update source pointer.")
+	m.inst("ADDQ", "$%d, SRC_PTR", BlockSize)
+	m.inst("SUBQ", "$%d, SRC_LEN", BlockSize)
+	m.inst("JMP", "loop")
+
+	m.label("done")
+	e.StoreStreams(streams)
+	m.ret()
 }
 
 // header outputs the file header with code generation warning and standard header includes.
@@ -375,6 +458,12 @@ func (m *Meow) undefall() {
 		m.printf("#undef %s\n", name)
 	}
 	m.defines = nil
+}
+
+// ret returns from a function
+func (m *Meow) ret() {
+	m.printf("\tRET\n")
+	m.undefall()
 }
 
 // arg reads an argument, and allocates a register for it.

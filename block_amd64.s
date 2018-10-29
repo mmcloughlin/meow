@@ -211,7 +211,7 @@ combine:
 
 	// Store hash.
 	MOVOU    X7, 0(DST_PTR)
-	RET      
+	RET
 #undef SEED
 #undef DST_PTR
 #undef SRC_PTR
@@ -222,6 +222,77 @@ combine:
 #undef PARTIAL_PTR
 #undef TMP
 #undef ZERO
+
+TEXT ·blocks128(SB),0,$0-48
+#define S_PTR DI
+	MOVQ     s_ptr+0(FP), S_PTR
+#define SRC_PTR SI
+	MOVQ     src_ptr+24(FP), SRC_PTR
+#define SRC_LEN AX
+	MOVQ     src_len+32(FP), SRC_LEN
+	MOVOU    0(S_PTR), X0
+	MOVOU    16(S_PTR), X1
+	MOVOU    32(S_PTR), X2
+	MOVOU    48(S_PTR), X3
+	MOVOU    64(S_PTR), X4
+	MOVOU    80(S_PTR), X5
+	MOVOU    96(S_PTR), X6
+	MOVOU    112(S_PTR), X7
+	MOVOU    128(S_PTR), X8
+	MOVOU    144(S_PTR), X9
+	MOVOU    160(S_PTR), X10
+	MOVOU    176(S_PTR), X11
+	MOVOU    192(S_PTR), X12
+	MOVOU    208(S_PTR), X13
+	MOVOU    224(S_PTR), X14
+	MOVOU    240(S_PTR), X15
+
+loop:
+	CMPQ     SRC_LEN, $256
+	JB       done
+	VAESDEC  0(SRC_PTR), X0, X0
+	VAESDEC  16(SRC_PTR), X1, X1
+	VAESDEC  32(SRC_PTR), X2, X2
+	VAESDEC  48(SRC_PTR), X3, X3
+	VAESDEC  64(SRC_PTR), X4, X4
+	VAESDEC  80(SRC_PTR), X5, X5
+	VAESDEC  96(SRC_PTR), X6, X6
+	VAESDEC  112(SRC_PTR), X7, X7
+	VAESDEC  128(SRC_PTR), X8, X8
+	VAESDEC  144(SRC_PTR), X9, X9
+	VAESDEC  160(SRC_PTR), X10, X10
+	VAESDEC  176(SRC_PTR), X11, X11
+	VAESDEC  192(SRC_PTR), X12, X12
+	VAESDEC  208(SRC_PTR), X13, X13
+	VAESDEC  224(SRC_PTR), X14, X14
+	VAESDEC  240(SRC_PTR), X15, X15
+
+	// Update source pointer.
+	ADDQ     $256, SRC_PTR
+	SUBQ     $256, SRC_LEN
+	JMP      loop
+
+done:
+	MOVOU    X0, 0(S_PTR)
+	MOVOU    X1, 16(S_PTR)
+	MOVOU    X2, 32(S_PTR)
+	MOVOU    X3, 48(S_PTR)
+	MOVOU    X4, 64(S_PTR)
+	MOVOU    X5, 80(S_PTR)
+	MOVOU    X6, 96(S_PTR)
+	MOVOU    X7, 112(S_PTR)
+	MOVOU    X8, 128(S_PTR)
+	MOVOU    X9, 144(S_PTR)
+	MOVOU    X10, 160(S_PTR)
+	MOVOU    X11, 176(S_PTR)
+	MOVOU    X12, 192(S_PTR)
+	MOVOU    X13, 208(S_PTR)
+	MOVOU    X14, 224(S_PTR)
+	MOVOU    X15, 240(S_PTR)
+	RET
+#undef S_PTR
+#undef SRC_PTR
+#undef SRC_LEN
 
 TEXT ·checksum256(SB),0,$32-56
 #define SEED R8
@@ -430,7 +501,7 @@ combine:
 
 	// Store hash.
 	MOVOU    X7, 0(DST_PTR)
-	RET      
+	RET
 #undef SEED
 #undef DST_PTR
 #undef SRC_PTR
@@ -441,6 +512,53 @@ combine:
 #undef PARTIAL_PTR
 #undef TMP
 #undef ZERO
+
+TEXT ·blocks256(SB),0,$0-48
+#define S_PTR DI
+	MOVQ     s_ptr+0(FP), S_PTR
+#define SRC_PTR SI
+	MOVQ     src_ptr+24(FP), SRC_PTR
+#define SRC_LEN AX
+	MOVQ     src_len+32(FP), SRC_LEN
+	VMOVDQU32 0(S_PTR), Y16
+	VMOVDQU32 32(S_PTR), Y17
+	VMOVDQU32 64(S_PTR), Y18
+	VMOVDQU32 96(S_PTR), Y19
+	VMOVDQU32 128(S_PTR), Y20
+	VMOVDQU32 160(S_PTR), Y21
+	VMOVDQU32 192(S_PTR), Y22
+	VMOVDQU32 224(S_PTR), Y23
+
+loop:
+	CMPQ     SRC_LEN, $256
+	JB       done
+	VAESDEC  0(SRC_PTR), Y16, Y16
+	VAESDEC  32(SRC_PTR), Y17, Y17
+	VAESDEC  64(SRC_PTR), Y18, Y18
+	VAESDEC  96(SRC_PTR), Y19, Y19
+	VAESDEC  128(SRC_PTR), Y20, Y20
+	VAESDEC  160(SRC_PTR), Y21, Y21
+	VAESDEC  192(SRC_PTR), Y22, Y22
+	VAESDEC  224(SRC_PTR), Y23, Y23
+
+	// Update source pointer.
+	ADDQ     $256, SRC_PTR
+	SUBQ     $256, SRC_LEN
+	JMP      loop
+
+done:
+	VMOVDQU32 Y16, 0(S_PTR)
+	VMOVDQU32 Y17, 32(S_PTR)
+	VMOVDQU32 Y18, 64(S_PTR)
+	VMOVDQU32 Y19, 96(S_PTR)
+	VMOVDQU32 Y20, 128(S_PTR)
+	VMOVDQU32 Y21, 160(S_PTR)
+	VMOVDQU32 Y22, 192(S_PTR)
+	VMOVDQU32 Y23, 224(S_PTR)
+	RET
+#undef S_PTR
+#undef SRC_PTR
+#undef SRC_LEN
 
 TEXT ·checksum512(SB),0,$32-56
 #define SEED R8
@@ -641,7 +759,7 @@ combine:
 
 	// Store hash.
 	MOVOU    X7, 0(DST_PTR)
-	RET      
+	RET
 #undef SEED
 #undef DST_PTR
 #undef SRC_PTR
@@ -652,3 +770,38 @@ combine:
 #undef PARTIAL_PTR
 #undef TMP
 #undef ZERO
+
+TEXT ·blocks512(SB),0,$0-48
+#define S_PTR DI
+	MOVQ     s_ptr+0(FP), S_PTR
+#define SRC_PTR SI
+	MOVQ     src_ptr+24(FP), SRC_PTR
+#define SRC_LEN AX
+	MOVQ     src_len+32(FP), SRC_LEN
+	VMOVDQU64 0(S_PTR), Z16
+	VMOVDQU64 64(S_PTR), Z17
+	VMOVDQU64 128(S_PTR), Z18
+	VMOVDQU64 192(S_PTR), Z19
+
+loop:
+	CMPQ     SRC_LEN, $256
+	JB       done
+	VAESDEC  0(SRC_PTR), Z16, Z16
+	VAESDEC  64(SRC_PTR), Z17, Z17
+	VAESDEC  128(SRC_PTR), Z18, Z18
+	VAESDEC  192(SRC_PTR), Z19, Z19
+
+	// Update source pointer.
+	ADDQ     $256, SRC_PTR
+	SUBQ     $256, SRC_LEN
+	JMP      loop
+
+done:
+	VMOVDQU64 Z16, 0(S_PTR)
+	VMOVDQU64 Z17, 64(S_PTR)
+	VMOVDQU64 Z18, 128(S_PTR)
+	VMOVDQU64 Z19, 192(S_PTR)
+	RET
+#undef S_PTR
+#undef SRC_PTR
+#undef SRC_LEN
