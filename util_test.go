@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"flag"
 	"io/ioutil"
+	"math/rand"
+	"reflect"
 	"strconv"
 	"testing"
+	"testing/quick"
 )
 
 var testVectorsFilename = flag.String("testvectors", "testdata/testvectors.json", "test vectors filename")
@@ -103,4 +106,30 @@ func AssertBytesEqual(t *testing.T, expect, got []byte) {
 	}
 
 	t.Fatalf("expected equal\n   got=%x\nexpect=%x\n delta=%x\n", got, expect, delta)
+}
+
+func Trials() int {
+	if testing.Short() {
+		return 1 << 7
+	}
+	return 1 << 14
+}
+
+func CheckEqual(t *testing.T, f, g checksumFunc) {
+	cfg := &quick.Config{}
+	cfg.MaxCount = Trials()
+	cfg.Values = func(args []reflect.Value, r *rand.Rand) {
+		n := r.Intn(8 << 10)
+		b := make([]byte, n)
+		r.Read(b)
+
+		args[0] = reflect.ValueOf(r.Uint64())
+		args[1] = reflect.ValueOf(b)
+	}
+
+	t.Logf("trials=%d", cfg.MaxCount)
+
+	if err := quick.CheckEqual(f, g, cfg); err != nil {
+		t.Fatal(err)
+	}
 }
