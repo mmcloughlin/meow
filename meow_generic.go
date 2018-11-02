@@ -5,28 +5,51 @@ import (
 	"encoding/binary"
 )
 
-// fallback is a pure go implementation of Meow checksum.
-func fallback(seed uint64, dst, src []byte) {
-	// Initialize streams.
+// checksumgo is a pure go implementation of Meow checksum.
+func checksumgo(seed uint64, dst, src []byte) {
 	var s [BlockSize]byte
 
+	if len(src) < aes.BlockSize {
+		finish(seed, s[:], dst, src, src, uint64(len(src)))
+		return
+	}
+
+	n := len(src) &^ (BlockSize - 1)
+	blocks(s[:], src[:n])
+	finish(seed, s[:], dst, src[n:], src[len(src)-aes.BlockSize:], uint64(len(src)))
+}
+
+// blocksgo hashes some number of full blocks into streams.
+func blocksgo(s, src []byte) {
+	if len(src)%BlockSize != 0 {
+		panic("blocks can only process multiples of BlockSize")
+	}
+
+	for len(src) >= BlockSize {
+		for i := 0; i < BlockSize; i += aes.BlockSize {
+			aesdec(src[i:], s[i:], s[i:])
+		}
+		src = src[BlockSize:]
+	}
+}
+
+func finishgo(seed uint64, s, dst, rem, trail []byte, length uint64) {
 	// Handle 16-byte blocks.
-	cur := src
 	i := 0
-	for len(cur) >= aes.BlockSize {
-		aesdec(cur, s[i:], s[i:])
-		cur = cur[aes.BlockSize:]
+	for len(rem) >= aes.BlockSize {
+		aesdec(rem, s[i:], s[i:])
+		rem = rem[aes.BlockSize:]
 		i = (i + aes.BlockSize) % BlockSize
 	}
 
 	// Partial block.
-	if len(cur) > 0 {
+	if len(rem) > 0 {
 		var partial []byte
-		if len(src) >= aes.BlockSize {
-			partial = src[len(src)-aes.BlockSize:]
+		if length >= aes.BlockSize {
+			partial = trail
 		} else {
 			partial = make([]byte, aes.BlockSize)
-			copy(partial[:], cur)
+			copy(partial[:], rem)
 		}
 
 		aesdec(partial, s[15*aes.BlockSize:], s[15*aes.BlockSize:])
@@ -41,8 +64,8 @@ func fallback(seed uint64, dst, src []byte) {
 
 	// Mixer.
 	var mixer [aes.BlockSize]byte
-	binary.LittleEndian.PutUint64(mixer[:], seed-uint64(len(src)))
-	binary.LittleEndian.PutUint64(mixer[8:], seed+uint64(len(src))+1)
+	binary.LittleEndian.PutUint64(mixer[:], seed-length)
+	binary.LittleEndian.PutUint64(mixer[8:], seed+length+1)
 
 	for i := 0; i < 3; i++ {
 		aesdec(mixer[:], m0, m0)

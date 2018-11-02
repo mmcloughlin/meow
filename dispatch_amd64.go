@@ -22,21 +22,29 @@ func init() {
 	case cpu.HasVAES && cpu.HasAVX512F && cpu.EnabledAVX512:
 		implementation = "vaes-512"
 		checksum = checksum512
+		blocks = blocks512
+		finish = finish128
 	case cpu.HasAES && cpu.HasAVX && cpu.EnabledAVX:
 		// AVX required for VEX-encoded AES instruction, which allows non-aligned memory addresses.
 		implementation = "aes-ni"
 		checksum = checksum128
+		blocks = blocks128
+		finish = finish128
 	}
 }
 
-// checksum128 implements Meow checksum with AES-NI.
+// AES-NI implementation.
 func checksum128(seed uint64, dst, src []byte)
+func blocks128(s, src []byte)
+func finish128(seed uint64, s, dst, rem, trail []byte, length uint64)
 
-// checksum256 implements Meow checksum with VAES-256.
+// VAES-256 implementation.
 func checksum256(seed uint64, dst, src []byte)
+func blocks256(s, src []byte)
 
-// checksum512 implements Meow checksum with VAES-512.
+// VAES-512 implementation.
 func checksum512(seed uint64, dst, src []byte)
+func blocks512(s, src []byte)
 
 // determineCPUFeatures populates flags in global cpu variable by querying CPUID.
 func determineCPUFeatures() {
