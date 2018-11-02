@@ -267,6 +267,8 @@ func (m *Meow) Generate() error {
 		m.blocks(backend)
 	}
 
+	m.finish()
+
 	return m.err
 }
 
@@ -284,30 +286,9 @@ func (m *Meow) checksum(e BlockEncryptor) {
 	m.arg("src_ptr", 32, "SI")
 	m.arg("src_len", 40, "AX")
 
-	m.section("Allocate general purpose registers.")
-	m.alloc("TOTAL_LEN", "R9")
-	m.alloc("MIX0", "R10")
-	m.alloc("MIX1", "R11")
-	m.alloc("PARTIAL_PTR", "R12")
-	m.alloc("TMP", "R13")
-	m.alloc("ZERO", "R15")
-
-	m.section("Prepare a zero register.")
-	m.inst("XORQ", "ZERO, ZERO")
-
 	m.section("Backup total input length.")
+	m.alloc("TOTAL_LEN", "R9")
 	m.inst("MOVQ", "SRC_LEN, TOTAL_LEN")
-
-	m.section("Prepare Mixer.")
-	m.inst("MOVQ", "SEED, MIX0")
-	m.inst("SUBQ", "SRC_LEN, MIX0")
-	m.inst("MOVQ", "SEED, MIX1")
-	m.inst("ADDQ", "SRC_LEN, MIX1")
-	m.inst("INCQ", "MIX1")
-
-	for i := 0; i < 2; i++ {
-		m.inst("MOVQ", "MIX%d, %s", i, mixer.Addr(8*i))
-	}
 
 	m.section("Load zero \"IV\".")
 	e.Zero()
@@ -326,61 +307,11 @@ func (m *Meow) checksum(e BlockEncryptor) {
 	m.inst("SUBQ", "$%d, SRC_LEN", BlockSize)
 	m.inst("JMP", "loop")
 
-	// The remainder is single block encryptions only, so handled with AES-NI.
-	b := NewAESNI(m)
-
 	m.section(fmt.Sprintf("Handle final sub %d-byte block.", BlockSize))
 	m.label("sub256")
 	e.XMM()
 
-	for i := 0; i < BlockSize-aes.BlockSize; i += aes.BlockSize {
-		m.inst("CMPQ", "SRC_LEN, $%d", aes.BlockSize)
-		m.inst("JB", "sub16")
-		b.AESLoad(i/aes.BlockSize, src)
-		m.inst("ADDQ", "$%d, SRC_PTR", aes.BlockSize)
-		m.inst("SUBQ", "$%d, SRC_LEN", aes.BlockSize)
-	}
-
-	m.section("Handle final sub 16-byte block.")
-	m.label("sub16")
-	m.inst("CMPQ", "SRC_LEN, $0")
-	m.inst("JE", "combine")
-
-	m.inst("MOVQ", "ZERO, %s", partial.Addr(0))
-	m.inst("MOVQ", "ZERO, %s", partial.Addr(8))
-	m.inst("LEAQ", "%s, PARTIAL_PTR", partial.Addr(0))
-
-	m.inst("CMPQ", "TOTAL_LEN, $16")
-	m.inst("JB", "byteloop")
-
-	m.inst("LEAQ", "-16(SRC_PTR)(SRC_LEN*1), SRC_PTR")
-	m.inst("MOVQ", "$16, SRC_LEN")
-
-	m.label("byteloop")
-	m.inst("MOVB", "(SRC_PTR), TMP")
-	m.inst("MOVB", "TMP, (PARTIAL_PTR)")
-	m.inst("INCQ", "SRC_PTR")
-	m.inst("INCQ", "PARTIAL_PTR")
-	m.inst("DECQ", "SRC_LEN")
-	m.inst("JNE", "byteloop")
-
-	b.AESLoad(15, partial)
-
-	m.section("Combine.")
-	m.label("combine")
-	m0 := 7
-	ordering := []int{10, 4, 5, 12, 8, 0, 1, 9, 13, 2, 6, 14, 3, 11, 15}
-	for _, s := range ordering {
-		b.AESMerge(m0, s)
-	}
-
-	m.section("Mixing.")
-	for i := 0; i < 3; i++ {
-		b.AESLoad(m0, mixer)
-	}
-
-	m.section("Store hash.")
-	b.Store(m0, Array{Base: "DST_PTR"})
+	m.finalize(src, partial, mixer, "-16(SRC_PTR)(SRC_LEN*1)")
 
 	m.ret()
 }
@@ -414,6 +345,105 @@ func (m *Meow) blocks(e BlockEncryptor) {
 	m.label("done")
 	e.StoreStreams(streams)
 	m.ret()
+}
+
+// finish outputs a function to finish the Meow hash (partial blocks and mixing).
+func (m *Meow) finish() {
+	// func finishgo(seed uint64, s, dst, rem, trail []byte, length uint64) {
+	f := &StackFrame{}
+	mixer := f.Alloc(aes.BlockSize)
+	partial := f.Alloc(aes.BlockSize)
+
+	m.text("finish128", f.Size, 8+4*24+8)
+
+	m.arg("seed", 0, "R8")
+	m.arg("s_ptr", 8, "R9")
+	m.arg("dst_ptr", 32, "DI")
+	m.arg("src_ptr", 56, "SI")
+	m.arg("src_len", 64, "AX")
+	m.arg("trail_ptr", 80, "R10")
+	m.arg("total_len", 104, "BX")
+
+	b := NewAESNI(m)
+	b.LoadStreams(Array{Base: "S_PTR"})
+
+	m.finalize(Array{Base: "SRC_PTR"}, partial, mixer, "(TRAIL_PTR)")
+
+	m.ret()
+}
+
+func (m *Meow) finalize(src, partial, mixer Array, trailaddr string) {
+	b := NewAESNI(m)
+
+	m.section("Allocate general purpose registers.")
+	m.alloc("MIX0", "R11")
+	m.alloc("MIX1", "R12")
+	m.alloc("PARTIAL_PTR", "R13")
+	m.alloc("TMP", "R14")
+	m.alloc("ZERO", "R15")
+
+	m.section("Prepare a zero register.")
+	m.inst("XORQ", "ZERO, ZERO")
+
+	m.section("Prepare Mixer.")
+	m.inst("MOVQ", "SEED, MIX0")
+	m.inst("SUBQ", "TOTAL_LEN, MIX0")
+	m.inst("MOVQ", "SEED, MIX1")
+	m.inst("ADDQ", "TOTAL_LEN, MIX1")
+	m.inst("INCQ", "MIX1")
+
+	for i := 0; i < 2; i++ {
+		m.inst("MOVQ", "MIX%d, %s", i, mixer.Addr(8*i))
+	}
+
+	for i := 0; i < BlockSize-aes.BlockSize; i += aes.BlockSize {
+		m.inst("CMPQ", "SRC_LEN, $%d", aes.BlockSize)
+		m.inst("JB", "sub16")
+		b.AESLoad(i/aes.BlockSize, src)
+		m.inst("ADDQ", "$%d, SRC_PTR", aes.BlockSize)
+		m.inst("SUBQ", "$%d, SRC_LEN", aes.BlockSize)
+	}
+
+	m.section("Handle final sub 16-byte block.")
+	m.label("sub16")
+	m.inst("CMPQ", "SRC_LEN, $0")
+	m.inst("JE", "combine")
+
+	m.inst("MOVQ", "ZERO, %s", partial.Addr(0))
+	m.inst("MOVQ", "ZERO, %s", partial.Addr(8))
+	m.inst("LEAQ", "%s, PARTIAL_PTR", partial.Addr(0))
+
+	m.inst("CMPQ", "TOTAL_LEN, $16")
+	m.inst("JB", "byteloop")
+
+	m.inst("LEAQ", "%s, SRC_PTR", trailaddr)
+	m.inst("MOVQ", "$16, SRC_LEN")
+
+	m.label("byteloop")
+	m.inst("MOVB", "(SRC_PTR), TMP")
+	m.inst("MOVB", "TMP, (PARTIAL_PTR)")
+	m.inst("INCQ", "SRC_PTR")
+	m.inst("INCQ", "PARTIAL_PTR")
+	m.inst("DECQ", "SRC_LEN")
+	m.inst("JNE", "byteloop")
+
+	b.AESLoad(15, partial)
+
+	m.section("Combine.")
+	m.label("combine")
+	m0 := 7
+	ordering := []int{10, 4, 5, 12, 8, 0, 1, 9, 13, 2, 6, 14, 3, 11, 15}
+	for _, s := range ordering {
+		b.AESMerge(m0, s)
+	}
+
+	m.section("Mixing.")
+	for i := 0; i < 3; i++ {
+		b.AESLoad(m0, mixer)
+	}
+
+	m.section("Store hash.")
+	b.Store(m0, Array{Base: "DST_PTR"})
 }
 
 // header outputs the file header with code generation warning and standard header includes.

@@ -14,28 +14,9 @@ TEXT ·checksum128(SB),0,$32-56
 #define SRC_LEN AX
 	MOVQ     src_len+40(FP), SRC_LEN
 
-	// Allocate general purpose registers.
-#define TOTAL_LEN R9
-#define MIX0 R10
-#define MIX1 R11
-#define PARTIAL_PTR R12
-#define TMP R13
-#define ZERO R15
-
-	// Prepare a zero register.
-	XORQ     ZERO, ZERO
-
 	// Backup total input length.
+#define TOTAL_LEN R9
 	MOVQ     SRC_LEN, TOTAL_LEN
-
-	// Prepare Mixer.
-	MOVQ     SEED, MIX0
-	SUBQ     SRC_LEN, MIX0
-	MOVQ     SEED, MIX1
-	ADDQ     SRC_LEN, MIX1
-	INCQ     MIX1
-	MOVQ     MIX0, 0(SP)
-	MOVQ     MIX1, 8(SP)
 
 	// Load zero "IV".
 	PXOR     X0, X0
@@ -87,6 +68,25 @@ loop:
 	// Handle final sub 256-byte block.
 
 sub256:
+
+	// Allocate general purpose registers.
+#define MIX0 R11
+#define MIX1 R12
+#define PARTIAL_PTR R13
+#define TMP R14
+#define ZERO R15
+
+	// Prepare a zero register.
+	XORQ     ZERO, ZERO
+
+	// Prepare Mixer.
+	MOVQ     SEED, MIX0
+	SUBQ     TOTAL_LEN, MIX0
+	MOVQ     SEED, MIX1
+	ADDQ     TOTAL_LEN, MIX1
+	INCQ     MIX1
+	MOVQ     MIX0, 0(SP)
+	MOVQ     MIX1, 8(SP)
 	CMPQ     SRC_LEN, $16
 	JB       sub16
 	VAESDEC  0(SRC_PTR), X0, X0
@@ -304,28 +304,9 @@ TEXT ·checksum256(SB),0,$32-56
 #define SRC_LEN AX
 	MOVQ     src_len+40(FP), SRC_LEN
 
-	// Allocate general purpose registers.
-#define TOTAL_LEN R9
-#define MIX0 R10
-#define MIX1 R11
-#define PARTIAL_PTR R12
-#define TMP R13
-#define ZERO R15
-
-	// Prepare a zero register.
-	XORQ     ZERO, ZERO
-
 	// Backup total input length.
+#define TOTAL_LEN R9
 	MOVQ     SRC_LEN, TOTAL_LEN
-
-	// Prepare Mixer.
-	MOVQ     SEED, MIX0
-	SUBQ     SRC_LEN, MIX0
-	MOVQ     SEED, MIX1
-	ADDQ     SRC_LEN, MIX1
-	INCQ     MIX1
-	MOVQ     MIX0, 0(SP)
-	MOVQ     MIX1, 8(SP)
 
 	// Load zero "IV".
 	VPXORQ   Y16, Y16, Y16
@@ -377,6 +358,25 @@ sub256:
 	VEXTRACTI32X4 $1, Y22, X13
 	VEXTRACTI32X4 $0, Y23, X14
 	VEXTRACTI32X4 $1, Y23, X15
+
+	// Allocate general purpose registers.
+#define MIX0 R11
+#define MIX1 R12
+#define PARTIAL_PTR R13
+#define TMP R14
+#define ZERO R15
+
+	// Prepare a zero register.
+	XORQ     ZERO, ZERO
+
+	// Prepare Mixer.
+	MOVQ     SEED, MIX0
+	SUBQ     TOTAL_LEN, MIX0
+	MOVQ     SEED, MIX1
+	ADDQ     TOTAL_LEN, MIX1
+	INCQ     MIX1
+	MOVQ     MIX0, 0(SP)
+	MOVQ     MIX1, 8(SP)
 	CMPQ     SRC_LEN, $16
 	JB       sub16
 	VAESDEC  0(SRC_PTR), X0, X0
@@ -570,28 +570,9 @@ TEXT ·checksum512(SB),0,$32-56
 #define SRC_LEN AX
 	MOVQ     src_len+40(FP), SRC_LEN
 
-	// Allocate general purpose registers.
-#define TOTAL_LEN R9
-#define MIX0 R10
-#define MIX1 R11
-#define PARTIAL_PTR R12
-#define TMP R13
-#define ZERO R15
-
-	// Prepare a zero register.
-	XORQ     ZERO, ZERO
-
 	// Backup total input length.
+#define TOTAL_LEN R9
 	MOVQ     SRC_LEN, TOTAL_LEN
-
-	// Prepare Mixer.
-	MOVQ     SEED, MIX0
-	SUBQ     SRC_LEN, MIX0
-	MOVQ     SEED, MIX1
-	ADDQ     SRC_LEN, MIX1
-	INCQ     MIX1
-	MOVQ     MIX0, 0(SP)
-	MOVQ     MIX1, 8(SP)
 
 	// Load zero "IV".
 	VPXORQ   Z16, Z16, Z16
@@ -635,6 +616,25 @@ sub256:
 	VEXTRACTI32X4 $1, Z19, X13
 	VEXTRACTI32X4 $2, Z19, X14
 	VEXTRACTI32X4 $3, Z19, X15
+
+	// Allocate general purpose registers.
+#define MIX0 R11
+#define MIX1 R12
+#define PARTIAL_PTR R13
+#define TMP R14
+#define ZERO R15
+
+	// Prepare a zero register.
+	XORQ     ZERO, ZERO
+
+	// Prepare Mixer.
+	MOVQ     SEED, MIX0
+	SUBQ     TOTAL_LEN, MIX0
+	MOVQ     SEED, MIX1
+	ADDQ     TOTAL_LEN, MIX1
+	INCQ     MIX1
+	MOVQ     MIX0, 0(SP)
+	MOVQ     MIX1, 8(SP)
 	CMPQ     SRC_LEN, $16
 	JB       sub16
 	VAESDEC  0(SRC_PTR), X0, X0
@@ -805,3 +805,191 @@ done:
 #undef S_PTR
 #undef SRC_PTR
 #undef SRC_LEN
+
+TEXT ·finish128(SB),0,$32-112
+#define SEED R8
+	MOVQ     seed+0(FP), SEED
+#define S_PTR R9
+	MOVQ     s_ptr+8(FP), S_PTR
+#define DST_PTR DI
+	MOVQ     dst_ptr+32(FP), DST_PTR
+#define SRC_PTR SI
+	MOVQ     src_ptr+56(FP), SRC_PTR
+#define SRC_LEN AX
+	MOVQ     src_len+64(FP), SRC_LEN
+#define TRAIL_PTR R10
+	MOVQ     trail_ptr+80(FP), TRAIL_PTR
+#define TOTAL_LEN BX
+	MOVQ     total_len+104(FP), TOTAL_LEN
+	MOVOU    0(S_PTR), X0
+	MOVOU    16(S_PTR), X1
+	MOVOU    32(S_PTR), X2
+	MOVOU    48(S_PTR), X3
+	MOVOU    64(S_PTR), X4
+	MOVOU    80(S_PTR), X5
+	MOVOU    96(S_PTR), X6
+	MOVOU    112(S_PTR), X7
+	MOVOU    128(S_PTR), X8
+	MOVOU    144(S_PTR), X9
+	MOVOU    160(S_PTR), X10
+	MOVOU    176(S_PTR), X11
+	MOVOU    192(S_PTR), X12
+	MOVOU    208(S_PTR), X13
+	MOVOU    224(S_PTR), X14
+	MOVOU    240(S_PTR), X15
+
+	// Allocate general purpose registers.
+#define MIX0 R11
+#define MIX1 R12
+#define PARTIAL_PTR R13
+#define TMP R14
+#define ZERO R15
+
+	// Prepare a zero register.
+	XORQ     ZERO, ZERO
+
+	// Prepare Mixer.
+	MOVQ     SEED, MIX0
+	SUBQ     TOTAL_LEN, MIX0
+	MOVQ     SEED, MIX1
+	ADDQ     TOTAL_LEN, MIX1
+	INCQ     MIX1
+	MOVQ     MIX0, 0(SP)
+	MOVQ     MIX1, 8(SP)
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X0, X0
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X1, X1
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X2, X2
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X3, X3
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X4, X4
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X5, X5
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X6, X6
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X7, X7
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X8, X8
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X9, X9
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X10, X10
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X11, X11
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X12, X12
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X13, X13
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+	CMPQ     SRC_LEN, $16
+	JB       sub16
+	VAESDEC  0(SRC_PTR), X14, X14
+	ADDQ     $16, SRC_PTR
+	SUBQ     $16, SRC_LEN
+
+	// Handle final sub 16-byte block.
+
+sub16:
+	CMPQ     SRC_LEN, $0
+	JE       combine
+	MOVQ     ZERO, 16(SP)
+	MOVQ     ZERO, 24(SP)
+	LEAQ     16(SP), PARTIAL_PTR
+	CMPQ     TOTAL_LEN, $16
+	JB       byteloop
+	LEAQ     (TRAIL_PTR), SRC_PTR
+	MOVQ     $16, SRC_LEN
+
+byteloop:
+	MOVB     (SRC_PTR), TMP
+	MOVB     TMP, (PARTIAL_PTR)
+	INCQ     SRC_PTR
+	INCQ     PARTIAL_PTR
+	DECQ     SRC_LEN
+	JNE      byteloop
+	VAESDEC  16(SP), X15, X15
+
+	// Combine.
+
+combine:
+	VAESDEC  X10, X7, X7
+	VAESDEC  X4, X7, X7
+	VAESDEC  X5, X7, X7
+	VAESDEC  X12, X7, X7
+	VAESDEC  X8, X7, X7
+	VAESDEC  X0, X7, X7
+	VAESDEC  X1, X7, X7
+	VAESDEC  X9, X7, X7
+	VAESDEC  X13, X7, X7
+	VAESDEC  X2, X7, X7
+	VAESDEC  X6, X7, X7
+	VAESDEC  X14, X7, X7
+	VAESDEC  X3, X7, X7
+	VAESDEC  X11, X7, X7
+	VAESDEC  X15, X7, X7
+
+	// Mixing.
+	VAESDEC  0(SP), X7, X7
+	VAESDEC  0(SP), X7, X7
+	VAESDEC  0(SP), X7, X7
+
+	// Store hash.
+	MOVOU    X7, 0(DST_PTR)
+	RET
+#undef SEED
+#undef S_PTR
+#undef DST_PTR
+#undef SRC_PTR
+#undef SRC_LEN
+#undef TRAIL_PTR
+#undef TOTAL_LEN
+#undef MIX0
+#undef MIX1
+#undef PARTIAL_PTR
+#undef TMP
+#undef ZERO

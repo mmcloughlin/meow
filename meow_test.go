@@ -59,15 +59,21 @@ func TestVectorsHash(t *testing.T) {
 }
 
 func TestQuickChecksumMatchesHash(t *testing.T) {
-	quick.CheckEqual(ChecksumSlice, ChecksumHash, nil)
+	if err := quick.CheckEqual(ChecksumSlice, ChecksumHash, nil); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestQuickHashBatching(t *testing.T) {
-	quick.CheckEqual(ChecksumHash, ChecksumRandomBatchedHash, nil)
+	if err := quick.CheckEqual(ChecksumHash, ChecksumRandomBatchedHash, nil); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestQuickHashReset(t *testing.T) {
-	quick.CheckEqual(ChecksumHash, ChecksumHashWithReset, nil)
+	if err := quick.CheckEqual(ChecksumHash, ChecksumHashWithReset, nil); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestVersions(t *testing.T) {

@@ -23,17 +23,20 @@ func init() {
 		implementation = "vaes-512"
 		checksum = checksum512
 		blocks = blocks512
+		finish = finish128
 	case cpu.HasAES && cpu.HasAVX && cpu.EnabledAVX:
 		// AVX required for VEX-encoded AES instruction, which allows non-aligned memory addresses.
 		implementation = "aes-ni"
 		checksum = checksum128
 		blocks = blocks128
+		finish = finish128
 	}
 }
 
 // AES-NI implementation.
 func checksum128(seed uint64, dst, src []byte)
 func blocks128(s, src []byte)
+func finish128(seed uint64, s, dst, rem, trail []byte, length uint64)
 
 // VAES-256 implementation.
 func checksum256(seed uint64, dst, src []byte)
