@@ -18,16 +18,20 @@ func TestVectorsHash(t *testing.T) {
 	}
 }
 
-func TestQuickChecksumMatchesHash(t *testing.T) {
+func TestChecksumMatchesHash(t *testing.T) {
 	CheckEqual(t, checksumSlice, checksumHash)
 }
 
-func TestQuickHashBatching(t *testing.T) {
+func TestHashBatching(t *testing.T) {
 	CheckEqual(t, checksumHash, checksumRandomBatchedHash)
 }
 
-func TestQuickHashReset(t *testing.T) {
+func TestHashReset(t *testing.T) {
 	CheckEqual(t, checksumHash, checksumHashWithReset)
+}
+
+func TestHashSumPreservesState(t *testing.T) {
+	CheckEqual(t, checksumHash, checksumHashWithIntermediateSum)
 }
 
 func TestVersions(t *testing.T) {

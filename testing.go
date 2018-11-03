@@ -42,3 +42,14 @@ func checksumRandomBatchedHash(seed uint64, data []byte) []byte {
 	}
 	return h.Sum(nil)
 }
+
+// checksumHashWithIntermediateSum computes the checksum and calls Sum()
+// inbetween. Intended to confirm that Sum() does not change hash state.
+func checksumHashWithIntermediateSum(seed uint64, data []byte) []byte {
+	h := New(seed)
+	half := len(data) / 2
+	h.Write(data[:half])
+	_ = h.Sum(nil)
+	h.Write(data[half:])
+	return h.Sum(nil)
+}
