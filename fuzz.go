@@ -14,23 +14,18 @@ func Fuzz(data []byte) int {
 	seed := binary.BigEndian.Uint64(data)
 	data = data[8:]
 
-	// Compute checksum via Checksum function.
-	c0 := Checksum(seed, data)
+	expect := Checksum(seed, data)
 
-	// Compute with the hash.Hash interface.
-	h := New(seed)
-	h.Write(data)
-	c1 := h.Sum(nil)
-
-	if !bytes.Equal(c0[:], c1) {
-		panic("Checksum != hash.Hash")
+	alt := []checksumFunc{
+		checksumHash,
+		checksumPureGo,
+		checksumHashWithIntermediateSum,
 	}
 
-	// Compute checksum via pure Go.
-	checksumgo(seed, c1, data)
-
-	if !bytes.Equal(c0[:], c1) {
-		panic("Checksum != checksumgo")
+	for _, a := range alt {
+		if !bytes.Equal(expect[:], a(seed, data)) {
+			panic("mismatch")
+		}
 	}
 
 	return 0

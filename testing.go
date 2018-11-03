@@ -53,3 +53,10 @@ func checksumHashWithIntermediateSum(seed uint64, data []byte) []byte {
 	h.Write(data[half:])
 	return h.Sum(nil)
 }
+
+// checksumPureGo computes the checksum with the fallback Go implementation.
+func checksumPureGo(seed uint64, data []byte) []byte {
+	cksum := make([]byte, Size)
+	checksumgo(seed, cksum, data)
+	return cksum
+}
