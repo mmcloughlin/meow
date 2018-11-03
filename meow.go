@@ -2,6 +2,7 @@ package meow
 
 import (
 	"crypto/aes"
+	"encoding/binary"
 	"hash"
 )
 
@@ -34,9 +35,35 @@ func Checksum(seed uint64, data []byte) [Size]byte {
 	return dst
 }
 
+// Checksum64 returns the 64-bit checksum of data.
+func Checksum64(seed uint64, data []byte) uint64 {
+	c := Checksum(seed, data)
+	return binary.LittleEndian.Uint64(c[:8])
+}
+
+// Checksum32 returns the 32-bit checksum of data.
+func Checksum32(seed uint64, data []byte) uint32 {
+	c := Checksum(seed, data)
+	return binary.LittleEndian.Uint32(c[:4])
+}
+
 // New returns a 128-bit Meow hash.
 func New(seed uint64) hash.Hash {
-	return &digest{seed: seed}
+	return new(seed, Size)
+}
+
+// New64 returns the 64-bit version of Meow hash.
+func New64(seed uint64) hash.Hash64 {
+	return new(seed, 8)
+}
+
+// New32 returns the 32-bit version of Meow hash.
+func New32(seed uint64) hash.Hash32 {
+	return new(seed, 4)
+}
+
+func new(seed uint64, size int) *digest {
+	return &digest{seed: seed, size: size}
 }
 
 // digest computes Meow hash in a streaming fashion.
@@ -47,9 +74,10 @@ type digest struct {
 	n      int             // number of (initial) bytes populated in b
 	t      []byte          // the trailing block of data written to the hash
 	length uint64          // total length written
+	size   int             // hash size in bytes
 }
 
-func (d *digest) Size() int { return Size }
+func (d *digest) Size() int { return d.size }
 
 func (d *digest) BlockSize() int { return BlockSize }
 
@@ -106,5 +134,13 @@ func (d *digest) Sum(b []byte) []byte {
 	var dst [Size]byte
 	dt := *d
 	finish(dt.seed, dt.s[:], dst[:], dt.b[:d.n], dt.t, dt.length)
-	return append(b, dst[:]...)
+	return append(b, dst[:dt.size]...)
+}
+
+func (d *digest) Sum32() uint32 {
+	return binary.LittleEndian.Uint32(d.Sum(nil))
+}
+
+func (d *digest) Sum64() uint64 {
+	return binary.LittleEndian.Uint64(d.Sum(nil))
 }

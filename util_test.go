@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
+	"hash"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"reflect"
@@ -131,5 +133,17 @@ func CheckEqual(t *testing.T, f, g checksumFunc) {
 
 	if err := quick.CheckEqual(f, g, cfg); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func AssertHashSize(t *testing.T, name string, h hash.Hash, size int) {
+	if h.Size() != size {
+		t.Errorf("%s Size() got=%d expect=%d", name, h.Size(), size)
+	}
+
+	io.WriteString(h, "Confirm the hash Sum() is what you expect")
+	n := len(h.Sum(nil))
+	if n != size {
+		t.Errorf("%s len(Sum()) got=%d expect=%d", name, n, size)
 	}
 }
