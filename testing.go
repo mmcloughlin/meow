@@ -21,7 +21,7 @@ func checksumHash(seed uint64, data []byte) []byte {
 // checksumHashWithReset is intended to confirm hash.Hash Reset() behavior.
 // Hashes some random data, resets and then computes the desired hash.
 func checksumHashWithReset(seed uint64, data []byte) []byte {
-	n := rand.Intn(9 << 10)
+	n := rand.Intn(8 << 10)
 	r := make([]byte, n)
 	rand.Read(r)
 
