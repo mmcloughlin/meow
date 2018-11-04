@@ -14,10 +14,10 @@ all: $(progs) testvectors.json
 %: %.cc
 	$(CXX) -o $@ $(CXXFLAGS) $< $(LDFLAGS) $(LDLIBS)
 
-$(progs): meow_hash.h
+$(progs): meow_hash.h meow_intrinsics.h
 
-meow_hash.h:
-	wget https://raw.githubusercontent.com/cmuratori/meow_hash/master/meow_hash.h
+meow_%.h:
+	wget https://raw.githubusercontent.com/cmuratori/meow_hash/master/$@
 
 testvectors.json: testvectors
 	./$< | tee $@ | python -m json.tool > /dev/null # pipe through python to catch a json mistake

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <getopt.h>
 
+#include "meow_intrinsics.h"
 #include "meow_hash.h"
 
 // Generate random uint64 value.
@@ -60,10 +61,10 @@ test_vector_t *test_vector_rand(size_t len)
     tv->seed = rand_uint64();
     tv->len = len;
     tv->input = rand_uint8_array(tv->len);
-    meow_hash hash = MeowHash1(tv->seed, tv->len, tv->input);
-    memcpy(tv->hash, &hash.u64[0], HASH_LEN);
-    tv->hash64 = hash.u64[0];
-    tv->hash32 = hash.u32[0];
+    meow_u128 hash = MeowHash1(tv->seed, tv->len, tv->input);
+    memcpy(tv->hash, &hash, HASH_LEN);
+    tv->hash64 = MeowU64From(hash);
+    tv->hash32 = MeowU32From(hash);
     return tv;
 }
 
