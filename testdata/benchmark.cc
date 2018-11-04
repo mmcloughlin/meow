@@ -2,7 +2,7 @@
 
 #include <benchmark/benchmark.h>
 
-#include <immintrin.h>
+#include "meow_intrinsics.h"
 #include "meow_hash.h"
 
 static void meow_hash_benchmark(benchmark::State &state)

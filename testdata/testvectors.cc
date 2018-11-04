@@ -2,7 +2,6 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <immintrin.h>
 #include <string.h>
 #include <getopt.h>
 
